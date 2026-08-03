@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+html, body { @apply bg-bg; }
+
+body {
+  @apply text-txt-mid font-sans;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 { @apply text-txt-hi font-semibold; letter-spacing: -0.011em; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-line2 rounded-full; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a42; }
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+.label {
+  @apply text-micro uppercase text-txt-dim font-medium;
+  letter-spacing: 0.06em;
+}
+
+.card { @apply bg-surface border border-line rounded-xl2; }
+
+@keyframes rowin {
+  from { background-color: rgba(62,207,142,0.12); }
+  to   { background-color: transparent; }
+}
+.rowin { animation: rowin 900ms ease-out; }
+
+@keyframes flow {
+  0%   { transform: translateX(0); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: translateX(22px); opacity: 0; }
+}
+.flow { animation: flow 1.2s linear infinite; }
+
+@keyframes fadein { from { opacity: 0; transform: translateY(4px);} to { opacity:1; transform:none; } }
+.fadein { animation: fadein 160ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
