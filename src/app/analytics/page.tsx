@@ -1,4 +1,5 @@
-import { readStore } from "@/lib/store";
+import { cookies } from "next/headers";
+import { COOKIE_NAME, decodeWire, rebuild } from "@/lib/session";
 import { DOC_TYPES } from "@/lib/doctypes";
 import { DOCS } from "@/lib/corpus";
 import { TypeTag } from "@/components/Pipeline";
@@ -6,13 +7,16 @@ import PageHead from "@/components/PageHead";
 
 export const dynamic = "force-dynamic";
 
-const DAILY_VOLUME = 180;   // documents/day at this company
-const HOURLY = 34;          // loaded cost of the ops coordinator
+/* Tune these per prospect before a live demo. Overstated ROI loses more
+   deals than modest ROI — pick a volume they will recognise as their own. */
+const DAILY_VOLUME = 60;    // documents/day
+const HOURLY = 34;          // loaded hourly cost of the person doing this today
 
-export default function AnalyticsPage() {
-  const { stats, records } = readStore();
-  const handled = stats.committed + stats.exceptions;
-  const autoRate = handled ? stats.committed / handled : 0;
+export default async function AnalyticsPage() {
+  const jar = await cookies();
+  const { stats, records } = rebuild(decodeWire(jar.get(COOKIE_NAME)?.value));
+  const relevant = stats.total - stats.discarded;
+  const autoRate = relevant ? stats.autoCommitted / relevant : 0;
 
   // Weighted average manual minutes across the observed document mix.
   const mixTotal = Object.entries(stats.byType)
@@ -39,22 +43,20 @@ export default function AnalyticsPage() {
         meta={`measured on ${stats.total} documents · projected at ${DAILY_VOLUME}/day`} />
 
       <div className="rounded-xl2 border border-acc-line bg-gradient-to-br from-acc-soft to-transparent px-5 py-5">
-        <div className="text-micro uppercase tracking-[0.14em] text-acc mb-2">
-          Operator time returned
-        </div>
+        <div className="label mb-2">Cost of doing this by hand today</div>
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[38px] sm:text-[44px] leading-none font-semibold text-acc tnum">
-            {weeklyHours.toFixed(0)}
+            ${annual.toLocaleString()}
           </span>
-          <span className="text-txt-mid">hours a week</span>
+          <span className="text-txt-mid">a year</span>
           <span className="ml-auto text-sm2 text-txt-mid">
-            <span className="text-txt-hi font-medium tnum">${annual.toLocaleString()}</span>{" "}
-            a year at ${HOURLY}/hr loaded
+            <span className="text-txt-hi font-medium tnum">{weeklyHours.toFixed(0)}</span>{" "}
+            operator hours a week at ${HOURLY}/hr loaded
           </span>
         </div>
         <p className="text-micro text-txt-dim mt-3 pt-3 border-t border-line leading-relaxed">
-          Weighted across the observed mix:{" "}
-          <span className="text-txt-mid">{weightedMins.toFixed(1)} min saved per document</span>{" "}
+          This is what the work costs you now — not a price. Weighted across the observed mix:{" "}
+          <span className="text-txt-mid">{weightedMins.toFixed(1)} min per document</span>{" "}
           ({byType.map(([k, n]) => `${DOC_TYPES[k].code} ${DOC_TYPES[k].minutesManual}m × ${n}`).join(" · ") || "—"}).
           Projected at {DAILY_VOLUME} documents/day — change that figure to match your volume.
         </p>
@@ -62,8 +64,8 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { l: "Straight-through rate", v: `${(autoRate * 100).toFixed(0)}%`,
-            s: `${stats.committed} of ${handled} committed with no human`, c: "text-acc" },
+          { l: "First-pass rate", v: `${(autoRate * 100).toFixed(0)}%`,
+            s: `${stats.autoCommitted} of ${relevant} needed no human`, c: "text-acc" },
           { l: "Avg latency", v: `${(avgMs / 1000).toFixed(2)}s`,
             s: `vs ~${weightedMins.toFixed(0)} min by hand`, c: "text-txt-hi" },
           { l: "Field accuracy", v: accuracy === null ? "—" : `${(accuracy * 100).toFixed(0)}%`,

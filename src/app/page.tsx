@@ -1,4 +1,10 @@
+import { cookies } from "next/headers";
 import OpsClient from "./OpsClient";
-import { readStore } from "@/lib/store";
+import { COOKIE_NAME, decodeWire, rebuild } from "@/lib/session";
+
 export const dynamic = "force-dynamic";
-export default function Page() { return <OpsClient initial={readStore()} />; }
+
+export default async function Page() {
+  const jar = await cookies();
+  return <OpsClient initial={rebuild(decodeWire(jar.get(COOKIE_NAME)?.value))} />;
+}
