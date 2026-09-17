@@ -77,12 +77,14 @@ export default function Shell({
         </nav>
 
         <div className="p-3 border-t border-line space-y-1.5">
+          {/* Static, deliberately: no mailbox is connected on this deployment, so a green
+              "watching" dot here would be the one lie the whole app tells on every screen. */}
           <Link href="/connections" className="flex items-center gap-2 text-micro group">
-            <span className="live-dot on" />
+            <span className="live-dot" />
             <span className="text-txt-lo truncate group-hover:text-txt-mid">{INTAKE_ADDRESS}</span>
           </Link>
           <div className="text-micro text-txt-dim">
-            {Object.keys(SYSTEMS).length} destinations configured
+            {Object.keys(SYSTEMS).length} destinations mapped · intake not connected here
           </div>
           <div className="text-micro text-txt-dim/80 pt-1 mt-1 border-t border-line">{CORPUS_LABEL}</div>
         </div>

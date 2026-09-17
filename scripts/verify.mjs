@@ -83,9 +83,10 @@ try {
   check("the hero states what happens to unverifiable documents",
     /held for a human/.test(root.html) && /never guessed/.test(root.html));
   check("hero and console are one page, linked", root.html.includes('href="#console"'));
-  check("nothing on the landing face pretends to be live traffic",
-    !/live-dot on/.test(root.html.split('id="console"')[0]),
-    "the pulsing dot belongs to the console, where a run can actually be running");
+  /* The pulsing dot is the app's only "something is happening right now" signal, so it must
+     appear during a run and never otherwise — not in the rail beside an unconnected mailbox, not
+     on the landing face. Checked on a cold visit, where nothing is in flight. */
+  check("a cold visit shows no live-traffic indicator anywhere", !/live-dot on/.test(root.html));
   check("the landing face does not sell with adjectives",
     !/revolutionary|game[- ]changing|cutting[- ]edge|AI-powered|leverage|seamless|unlock/i.test(root.html));
   check("it reads as a product, not a demo", root.html.includes("Inbound document automation"));
