@@ -321,7 +321,10 @@ export default function OpsClient({ initial }: { initial: Store }) {
           <button onClick={() => setLogOpen(v => !v)}
             className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-raised transition-colors">
             <span className="label">Event stream</span>
-            <span className="text-micro font-mono text-txt-dim tnum">{events.length}</span>
+            {/* A seeded run has nothing streamed yet. "0" reads as a fault; say what it is. */}
+            <span className="text-micro font-mono text-txt-dim tnum">
+              {events.length ? events.length : store.seeded ? "empty until replay" : "0"}
+            </span>
             <svg viewBox="0 0 12 12" fill="none"
                  className={`w-3 h-3 ml-auto text-txt-dim transition-transform ${logOpen ? "rotate-90" : ""}`}>
               <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5"
