@@ -129,7 +129,7 @@ export default function OpsClient({ initial }: { initial: Store }) {
     : (processed[activeId]?.doc?.subject ?? DOCS.find(d => d.id === activeId)?.subject ?? null);
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pb-10">
+    <div>
       <Hero
         client={CLIENT_NAME}
         steps={flowSteps}
@@ -143,10 +143,11 @@ export default function OpsClient({ initial }: { initial: Store }) {
         }}
       />
 
-      <section id="console" className="mt-9 pt-8 border-t border-line scroll-mt-4">
+      <section id="console" className="sect mt-10 scroll-mt-4">
       <PageHead
-        eyebrow={<><span className="live-dot" /> console</>}
-        title="Inbox"
+        no="01"
+        eyebrow="console"
+        title="The run, line by line"
         meta={`${CLIENT_NAME} · ${DOCS.length} documents today · intake ${INTAKE_ADDRESS} · ${DAILY_VOLUME}/day expected · engine ${engineLabel()}`}
         actions={
           <>
@@ -179,7 +180,8 @@ export default function OpsClient({ initial }: { initial: Store }) {
         {/* ── paste one of THEIR documents ─────────────────────────────── */}
         <div id="intake" className="card px-4 sm:px-5 py-4 scroll-mt-4">
           <div className="flex items-baseline gap-2.5 mb-3 flex-wrap">
-            <span className="text-lg2 font-semibold text-txt-hi tracking-[-0.015em]">Send it a document</span>
+            <span className="sect-no">02</span>
+            <h2 className="text-[21px] leading-[26px] text-txt-hi">Send it a document</h2>
             <span className="chip !py-0.5">{INTAKE_ADDRESS} in production</span>
             <span className="text-micro text-txt-dim">
               {LIVE_ENABLED
@@ -233,21 +235,13 @@ export default function OpsClient({ initial }: { initial: Store }) {
           )}
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Processed" value={stats.total} unit={`of ${DOCS.length}`}
-                sub={`received today · ${stats.liveDocs} from this session`} />
-          <Stat label="Committed" value={stats.committed} tone="acc"
-                sub={stats.total
-                  ? `${pct(r.onReceived)} of everything received · ${pct(r.onActionable)} of ${r.actionable} actionable`
-                  : "—"} />
-          <Stat label="Held" value={stats.exceptions} tone="hold" unit="in queue"
-                sub="waiting on a human · nothing written" />
-          <Stat label="Discarded" value={stats.discarded} tone="dim" unit="noise"
-                sub="no transactional content · nothing written" />
+        <div className="flex items-baseline gap-2.5 mb-2 mt-1">
+          <span className="sect-no">03</span>
+          <span className="label">the counts</span>
+          <span className="text-micro text-txt-dim ml-1">both denominators, always on the same line</span>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Processed" value={stats.total} unit={`of ${DOCS.length}`}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-6">          <Stat label="Processed" value={stats.total} unit={`of ${DOCS.length}`}
                 sub={`received today · ${stats.liveDocs} from this session`} />
           <Stat label="Committed" value={stats.committed} tone="acc"
                 sub={stats.total
@@ -257,22 +251,23 @@ export default function OpsClient({ initial }: { initial: Store }) {
                 sub="waiting on a human · nothing written" />
           <Stat label="Discarded" value={stats.discarded} tone="dim" unit="noise"
                 sub="no transactional content · nothing written" />
-        </div>
+                </div>
 
         {stats.exceptions > 0 && (
           <Link href="/exceptions"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl2 border border-hold-line bg-hold-soft
-                       hover:bg-hold-soft/70 transition-colors fadein">
-            <span className="text-xl font-semibold text-hold tnum leading-none">{stats.exceptions}</span>
+            className="flex items-baseline gap-3 px-3 py-2.5 bg-hold-soft hover:bg-hover transition-colors"
+            style={{ boxShadow: "inset 2px 0 0 var(--amber)" }}>
+            <span className="sect-no">04</span>
+            <span className="fig text-num text-hold leading-none">{stats.exceptions}</span>
             <span className="text-sm2 text-txt-hi">documents need review</span>
-            <span className="ml-auto text-xs2 text-hold">Open →</span>
+            <span className="ml-auto font-mono text-micro text-hold">open →</span>
           </Link>
         )}
 
         {/* queue */}
         <div className="card overflow-hidden">
           <div className="px-3 sm:px-4 py-2.5 border-b border-line flex items-center gap-1 overflow-x-auto">
-            <span className="label mr-2 shrink-0">Queue</span>
+            <span className="label mr-2 shrink-0">05 · the queue</span>
             {FILTERS.map(([k, l]) => (
               <button key={k} onClick={() => setFilter(k)}
                 className={`px-2.5 py-1 rounded-md text-xs2 shrink-0 transition-colors ${
@@ -306,7 +301,7 @@ export default function OpsClient({ initial }: { initial: Store }) {
                   return (
                     <tr key={d.id}
                       className={`border-b border-line/60 last:border-0 hover:bg-raised transition-colors
-                        ${p?.status === "committed" ? "rowin" : ""}`}>
+                        ${activeId === d.id ? "rowin" : ""}`}>
                       <td className="px-4 py-2 font-mono text-micro text-txt-dim tnum">{d.id}</td>
                       <td className="px-2 py-2">
                         {p ? <TypeTag code={def.code} /> : <span className="text-txt-dim">—</span>}
@@ -369,7 +364,7 @@ export default function OpsClient({ initial }: { initial: Store }) {
         <div className="card overflow-hidden">
           <button onClick={() => setLogOpen(v => !v)}
             className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-raised transition-colors">
-            <span className="label">Event stream</span>
+            <span className="label">06 · event stream</span>
             {/* A seeded run has nothing streamed yet. "0" reads as a fault; say what it is. */}
             <span className="text-micro font-mono text-txt-dim tnum">
               {events.length ? events.length : store.seeded ? "empty until replay" : "0"}
@@ -388,9 +383,10 @@ export default function OpsClient({ initial }: { initial: Store }) {
         </div>
       </div>
 
-      <div className="card-hero mt-8 px-5 sm:px-7 py-6 flex flex-col sm:flex-row sm:items-center gap-5">
+      <div className="inkband mt-12 px-5 sm:px-8 py-7 flex flex-col sm:flex-row sm:items-center gap-6">
         <div className="min-w-0">
-          <h2 className="text-lg2 font-semibold text-txt-hi">The only number worth trusting is yours</h2>
+          <div className="eyebrow mb-2.5">07 · terms</div>
+          <h2 className="text-[26px] leading-[32px]" style={{ color: "var(--paper)" }}>The only number worth trusting is yours</h2>
           <p className="text-xs2 text-txt-lo mt-1.5 leading-relaxed max-w-[62ch]">
             Send 50 documents from your real inbox. They go through the same gates you just watched —
             the same 85% field gate, the same hold queue — and come back as rows, with the accuracy

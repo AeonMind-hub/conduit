@@ -49,7 +49,7 @@ export default function RecordsClient({ initial }: { initial: Store }) {
 
   if (records.length === 0) {
     return (
-      <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto">
+      <div className="">
         <PageHead title="Records" meta="committed to your systems" />
         <div className="card py-16 text-center">
           <p className="text-sm2 text-txt-lo">Nothing committed yet.</p>
@@ -194,13 +194,15 @@ export default function RecordsClient({ initial }: { initial: Store }) {
       </div>
     </div>
   ) : (
-    <div className="card h-full grid place-items-center py-20">
-      <p className="text-sm2 text-txt-lo">Select a record to see what the system did</p>
+    <div className="pane-wait">
+      <p className="text-[15px] text-txt-lo">Select a record to see what the system did</p>
+      <p className="text-micro text-txt-dim mt-2.5 leading-relaxed max-w-[38ch] text-center">Pick a row to see the payload that went out, the field map it came from, the confidence
+        the engine gave each value, and whether a human corrected one.</p>
     </div>
   );
 
   return (
-    <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto lg:h-[calc(100vh-2.5rem)] lg:flex lg:flex-col">
+    <div className="lg:flex lg:flex-col">
       <PageHead title="Records"
         meta={`${records.length} committed across 4 systems · click any record to see what it did`}
         actions={

@@ -59,6 +59,10 @@ try {
   // ── 1. a cold visitor with no cookie must land on a FINISHED run ───────────
   const root = await get("/");
   check("GET / is 200", root.status === 200, `status ${root.status}`);
+  /* Copy assertions run on the tag-stripped text. The interface is typeset now — an italic inside
+     a headline is a design decision, and it must not be able to break a claim by inserting markup
+     mid-sentence. DOM assertions below still look at raw HTML, where the element is the claim. */
+  const txt = root.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
   check("cold visit shows 66 committed", />\s*66\s*</.test(root.html) || root.html.includes("66 committed"));
   check("cold visit shows both denominators",
     root.html.includes("88%") && root.html.includes("96%"),
@@ -79,9 +83,9 @@ try {
   check("the first thing a prospect is invited to do is send it their work",
     root.html.includes("Send it a document") && root.html.includes('id="intake"'));
   check("the landing face carries the claim, not a feature list",
-    /Documents arrive/.test(root.html) && /Rows appear in your systems/.test(root.html));
+    /Documents arrive/.test(txt) && /Rows appear in your systems\./.test(txt));
   check("the hero states what happens to unverifiable documents",
-    /held for a human/.test(root.html) && /never guessed/.test(root.html));
+    /goes to a human/.test(txt) && /it is held, never guessed/.test(txt));
   check("hero and console are one page, linked", root.html.includes('href="#console"'));
   /* The pulsing dot is the app's only "something is happening right now" signal, so it must
      appear during a run and never otherwise — not in the rail beside an unconnected mailbox, not
@@ -90,6 +94,32 @@ try {
   check("the landing face does not sell with adjectives",
     !/revolutionary|game[- ]changing|cutting[- ]edge|AI-powered|leverage|seamless|unlock/i.test(root.html));
   check("it reads as a product, not a demo", root.html.includes("Inbound document automation"));
+
+  // ── 1b. the Record frame: a bound document, not a dashboard ────────────────
+  check("the page is framed like a document (masthead, main, footer)",
+    /class="mast/.test(root.html) && root.html.includes("<main") && root.html.includes("back to the run"));
+  check("the table of contents reaches every section of the product",
+    (root.html.match(/class="toclink/g) || []).length === 5,
+    `${(root.html.match(/class="toclink/g) || []).length} links`);
+  check("the new theme actually shipped, rather than the dark one underneath it",
+    root.html.includes('data-theme="record"'));
+  /* Typography is the product's voice here. If the fonts came from a CDN, the page would render in
+     a fallback for a second on slow warehouse wifi — which is the exact moment a prospect decides
+     whether this looks like something they would pay for. */
+  check("type is first-party: self-hosted woff2, no font CDN in the document",
+    root.html.includes("/_next/static/media/") && !/fonts\.(googleapis|gstatic)\.com/.test(root.html));
+  check("the sheet is numbered where a reader can quote it back",
+    /class="sect-no">01</.test(root.html) && /class="sect-no">03</.test(root.html));
+  /* The console used to say "watching intake" while nothing was connected. A label claiming an
+     input the deployment does not have is worse than an empty one. */
+  check("no screen claims to be watching a mailbox", !/watching intake/i.test(root.html));
+  // A duplicated stat grid shipped once and was visible on every visit. Never again, by test.
+  check("the counts are printed once", (root.html.match(/>Processed</g) || []).length === 1);
+  /* The fill bar means something specific now: ink = walked through, amber = a gate cut, green =
+     the write. One green bar per sheet, or green stops meaning anything. */
+  check("exactly one write-meter on the console sheet",
+    (root.html.match(/meter mt-2[^"]*write/g) || []).length === 1,
+    `${(root.html.match(/meter mt-2[^"]*write/g) || []).length} found`);
 
   // ── 2. the money page must never print a $0 headline ───────────────────────
   const an = await get("/analytics");

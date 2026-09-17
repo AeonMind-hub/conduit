@@ -58,7 +58,7 @@ export default async function ConnectionsPage() {
     .flatMap(d => d.fields.map(f => ({ dest: d.destinationCode, sys: systemName(d.destinationCode), type: d, f })));
 
   return (
-    <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto">
+    <div className="">
       <PageHead
         title="Connections"
         meta={`${CLIENT_NAME} · ${ENV_LABEL} · ${codes.length} destinations · intake ${INTAKE_ADDRESS}`}

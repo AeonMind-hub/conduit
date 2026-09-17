@@ -43,7 +43,7 @@ export default async function AnalyticsPage() {
   const empty = stats.total === 0;
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5 space-y-3">
+    <div className="space-y-3">
       <PageHead title="Analytics"
         meta={`${CLIENT_NAME} · measured on ${stats.total} documents · intake ${INTAKE_ADDRESS} · projected at ${DAILY_VOLUME}/day · ${engineLabel()}`} />
 

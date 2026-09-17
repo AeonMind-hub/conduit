@@ -2,128 +2,80 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CLIENT_SHORT, CORPUS_LABEL, INTAKE_ADDRESS, SYSTEMS, TAGLINE } from "@/lib/config";
-import { useEffect, useState } from "react";
+import { CLIENT_SHORT, INTAKE_ADDRESS, SYSTEMS, TAGLINE } from "@/lib/config";
 
-/* Icons kept as small inline paths — no icon library, no extra weight. */
-const I = {
-  ops: "M3 12h4l2-5 3 10 2-6 2 3h5",
-  hold: "M12 8v5m0 3v.5M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",
-  rec: "M4 5h16M4 10h16M4 15h10M4 20h7",
-  chart: "M4 20V10m5 10V4m5 16v-7m5 7V8",
-  link: "M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-1.5 1.5M13.5 17.5 12 19a4 4 0 0 1-6-6l1.5-1.5",
-};
+/*
+  The old frame was a left rail with icons — the shape of an admin tool you log into every day.
+  A prospect opens this once, from a link, to read an argument. So the frame is a masthead instead:
+  nameplate, who it is for, and a table of contents with section numbers, the way a report is bound.
 
+  There is no status light here. Nothing is being watched on this deployment, and an "connected"
+  indicator that lies costs every number on the page its credibility.
+*/
 const NAV = [
-  { href: "/",           label: "Operations", icon: I.ops },
-  { href: "/exceptions", label: "Held",       icon: I.hold, badge: true },
-  { href: "/records",    label: "Records",    icon: I.rec },
-  { href: "/connections", label: "Connections", icon: I.link },
-  { href: "/analytics",  label: "Analytics",  icon: I.chart },
+  { href: "/",           label: "Operations",   no: "01" },
+  { href: "/exceptions", label: "Held",         no: "02", badge: true },
+  { href: "/records",    label: "Records",      no: "03" },
+  { href: "/connections", label: "Connections", no: "04" },
+  { href: "/analytics",  label: "Analytics",    no: "05" },
 ];
-
-function Icon({ d, className = "" }: { d: string; className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className}
-         stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d={d} />
-    </svg>
-  );
-}
 
 export default function Shell({
   children, heldCount = 0,
 }: { children: React.ReactNode; heldCount?: number }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => { setOpen(false); }, [pathname]);
 
   return (
-    <div className="min-h-screen flex">
-      {/* ── desktop rail ─────────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col w-[216px] shrink-0 border-r border-line bg-surface/80 backdrop-blur-xl">
-        <div className="h-14 flex items-center gap-2.5 px-4 border-b border-line">
-          <span className="sr-only">{CLIENT_SHORT} workspace</span>
-          <div className="relative w-7 h-7 rounded-lg bg-acc-soft border border-acc-line grid place-items-center shrink-0">
-            <div className="w-[7px] h-[7px] rounded-[2px] bg-acc" />
-            <div className="absolute inset-0 rounded-lg" style={{ boxShadow: "0 0 18px -4px rgba(62,207,142,0.55)" }} />
-          </div>
-          <div className="leading-tight min-w-0">
-            <div className="text-sm2 font-semibold text-txt-hi truncate">Conduit</div>
-            <div className="text-micro text-txt-dim truncate">{TAGLINE}</div>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-2 space-y-0.5 mt-1">
-          <div className="label px-2.5 pt-1.5 pb-1.5">{CLIENT_SHORT}</div>
-          {NAV.map(n => {
-            const on = pathname === n.href;
-            return (
-              <Link key={n.href} href={n.href}
-                className={`relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm2 transition-colors ${
-                  on ? "bg-hover text-txt-hi" : "text-txt-mid hover:text-txt-hi hover:bg-raised"}`}>
-                {on && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[15px] rounded-full bg-acc" />}
-                <Icon d={n.icon} className={`w-[17px] h-[17px] shrink-0 ${on ? "text-acc" : "text-txt-dim"}`} />
-                <span className="truncate">{n.label}</span>
-                {n.badge && heldCount > 0 && (
-                  <span className="ml-auto text-micro tnum px-1.5 py-0.5 rounded-md bg-hold-soft text-hold border border-hold-line">
-                    {heldCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-3 border-t border-line space-y-1.5">
-          {/* Static, deliberately: no mailbox is connected on this deployment, so a green
-              "watching" dot here would be the one lie the whole app tells on every screen. */}
-          <Link href="/connections" className="flex items-center gap-2 text-micro group">
-            <span className="live-dot" />
-            <span className="text-txt-lo truncate group-hover:text-txt-mid">{INTAKE_ADDRESS}</span>
-          </Link>
-          <div className="text-micro text-txt-dim">
-            {Object.keys(SYSTEMS).length} destinations mapped · intake not connected here
-          </div>
-          <div className="text-micro text-txt-dim/80 pt-1 mt-1 border-t border-line">{CORPUS_LABEL}</div>
-        </div>
-      </aside>
-
-      {/* ── main ─────────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* mobile top bar */}
-        <header className="md:hidden h-14 shrink-0 flex items-center gap-3 px-4 border-b border-line bg-surface sticky top-0 z-20">
-          <div className="w-6 h-6 rounded-md bg-acc-soft border border-acc-line grid place-items-center">
-            <div className="w-[7px] h-[7px] rounded-[2px] bg-acc" />
-          </div>
-          <span className="text-sm2 font-semibold text-txt-hi tracking-[-0.02em]">Conduit</span>
-          <span className="ml-auto text-micro text-txt-dim">{CLIENT_SHORT}</span>
-        </header>
-
-        <div className="flex-1 min-w-0 pb-16 md:pb-0">{children}</div>
-      </div>
-
-      {/* ── mobile bottom tabs ───────────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 border-t border-line bg-surface/90 backdrop-blur-xl grid grid-cols-5">
-        {NAV.map(n => {
-          const on = pathname === n.href;
-          return (
-            <Link key={n.href} href={n.href}
-              className="flex flex-col items-center justify-center gap-1 relative">
-              <div className="relative">
-                <Icon d={n.icon} className={`w-5 h-5 ${on ? "text-acc" : "text-txt-dim"}`} />
-                {n.badge && heldCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-1 rounded-full bg-hold text-bg text-[10px] font-semibold grid place-items-center tnum">
-                    {heldCount}
-                  </span>
-                )}
-              </div>
-              <span className={`text-[10px] ${on ? "text-txt-hi" : "text-txt-dim"}`}>{n.label}</span>
+    <div className="min-h-screen flex flex-col">
+      <header className="mast sticky top-0 z-40 border-b border-line">
+        <div className="mx-auto max-w-[1180px] px-5 sm:px-7">
+          <div className="h-[54px] flex items-center gap-3">
+            <Link href="/" className="flex items-baseline gap-2.5 shrink-0">
+              <span className="inline-block w-[11px] h-[11px] bg-acc translate-y-[1px]" aria-hidden />
+              <span className="mast-name text-[21px] text-txt-hi">Conduit</span>
             </Link>
-          );
-        })}
-      </nav>
+            <span className="hidden sm:block w-px h-[18px] bg-line2" />
+            <span className="hidden sm:block text-micro uppercase tracking-[0.14em] text-txt-lo truncate">
+              {CLIENT_SHORT} · {TAGLINE}
+            </span>
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <span className="hidden md:inline font-mono text-micro text-txt-lo">{INTAKE_ADDRESS}</span>
+              <Link href="/#intake" className="btn btn-primary !px-3 !py-1.5 !text-xs2">Send a document</Link>
+            </div>
+          </div>
+
+          {/* Wraps rather than scrolls: on a phone a row that runs off the edge hides two sections of the
+        document behind a gesture nobody tries on a page they did not come to navigate. */}
+          <nav className="flex flex-wrap items-center gap-x-1 gap-y-0 border-t border-line -mb-px">
+            {NAV.map(n => {
+              const on = pathname === n.href;
+              return (
+                <Link key={n.href} href={n.href} className={`toclink flex items-center gap-1.5 ${on ? "on" : ""}`}>
+                  <span className="text-txt-dim">{n.no}</span>
+                  <span>{n.label}</span>
+                  {n.badge && heldCount > 0 && (
+                    <span className="stamp stamp-hold !px-1 !py-0 ml-0.5 tnum">{heldCount}</span>
+                  )}
+                </Link>
+              );
+            })}
+            <span className="ml-auto hidden lg:flex items-center gap-1.5 pl-4 text-micro font-mono text-txt-dim whitespace-nowrap">
+              {Object.keys(SYSTEMS).length} destinations mapped · intake not connected here
+            </span>
+          </nav>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-[1180px] px-5 sm:px-7 py-8 flex-1 min-w-0">{children}</main>
+
+      <footer className="border-t border-line">
+        <div className="mx-auto max-w-[1180px] px-5 sm:px-7 py-5 flex flex-wrap items-baseline gap-x-5 gap-y-1
+                        text-micro text-txt-dim font-mono">
+          <span>Conduit — inbound document automation</span>
+          <span>nothing is written to a live system from this page</span>
+          <a href="/#console" className="ml-auto text-txt-mid hover:underline">back to the run</a>
+        </div>
+      </footer>
     </div>
   );
 }

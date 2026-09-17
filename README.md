@@ -11,11 +11,25 @@ the demo already has your company name and your volume in it — change nothing,
 
 ---
 
+## The interface
+
+Set as a document of record — warm paper, one ink colour, hairline rules, a serif for statements
+and a monospace for every figure, so a column of counts lines up the way it does in a ledger. Colour
+is a status and nothing else: ink where a batch walked through a stage, amber where a gate cut
+documents, green only for the write. The pulsing indicator appears during a run and never otherwise,
+and no screen claims to be watching a mailbox this deployment cannot reach.
+
+Type is self-hosted (`src/app/fonts`, six woff2 files, ~173 kB) rather than pulled from a font CDN,
+because the demo gets opened on a phone on warehouse wifi and the first second is the whole
+impression. `NEXT_PUBLIC_*` variables retune the copy per prospect; nothing about the layout needs
+to change to rebrand it.
+
 ## What this is
 
 A working deployment of the product, running on a **sample corpus**: 75 hand-authored documents
 (purchase orders, supplier invoices, delivery bookings, quote requests and noise) shaped like one
-distribution company's inbox. The rail says "Sample corpus · 75 documents" and that is the whole
+distribution company's inbox. Under the figures on the first page it says
+"Sample corpus · 75 documents", and that is the whole
 disclosure — it is the same convention every enterprise demo uses, and it is why the numbers below
 are labelled with their denominators instead of hidden behind a hedge.
 
@@ -84,13 +98,13 @@ different numbers, not an edited codebase**:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `NEXT_PUBLIC_CLIENT_NAME` | `Northwind Supply Co` | The company whose inbox this is. Appears in the rail, the page title and the acknowledgement letters. |
+| `NEXT_PUBLIC_CLIENT_NAME` | `Northwind Supply Co` | The company whose inbox this is. Appears in the masthead, the page title and the acknowledgement letters. |
 | `NEXT_PUBLIC_CLIENT_INDUSTRY` | `distribution` | Context line. |
-| `NEXT_PUBLIC_INTAKE_ADDRESS` | `ops@<client>.com` | The mailbox their documents arrive in. Shown in the rail and on Connections. |
+| `NEXT_PUBLIC_INTAKE_ADDRESS` | `ops@<client>.com` | The mailbox their documents arrive in. Shown in the masthead and on Connections. |
 | `NEXT_PUBLIC_SYSTEMS` | `ERP=NetSuite,AP=Xero,WMS=SAP Business One,CRM=HubSpot` | **Their actual stack.** Naming the system they type into is what turns a look into a meeting. |
 | `NEXT_PUBLIC_ENV_LABEL` | `Sandbox` | Environment chip on the integrations screen. |
 | `NEXT_PUBLIC_TAGLINE` | `Inbound document automation` | Page title and social preview card. |
-| `NEXT_PUBLIC_CORPUS_LABEL` | `Sample corpus · 75 documents` | The one disclosure the product makes, in the rail. Keep it — and keep it that short. |
+| `NEXT_PUBLIC_CORPUS_LABEL` | `Sample corpus · 75 documents` | The one disclosure the product makes, under the figures on the front page. Keep it — and keep it that short. |
 | `NEXT_PUBLIC_DAILY_VOLUME` | `60` | Their documents per day. The ROI projection is meaningless if this is not theirs. |
 | `NEXT_PUBLIC_HOURLY_COST` | `34` | Loaded hourly cost of the person doing it today. |
 | `NEXT_PUBLIC_BUILD_FEE` / `NEXT_PUBLIC_MONTHLY_FEE` | `450` / `120` | Kept for the proposal maths. **Not rendered in the app** — a price inside a product reads as a marketplace listing; a price in a proposal reads as a quote. |

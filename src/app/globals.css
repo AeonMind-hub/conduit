@@ -2,154 +2,268 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Record ────────────────────────────────────────────────────────
+   One palette, one place. Paper is not pure white (pure white on a phone at 11pm is a torch, and
+   it makes grey text look like it lost a contrast argument). Ink is not pure black, so long-form
+   type keeps a little warmth. Colour is only ever a status.
+   ───────────────────────────────────────────────────────────────── */
 :root {
-  color-scheme: dark;
-  --mint: 62 207 142;
-  --cool: 91 140 255;
-  --amber: 232 178 90;
+  color-scheme: light;
+
+  --paper: #f2efe8;
+  --panel: #fbf9f4;
+  --inset: #eae5da;
+  --hover: #e2dccd;
+  --rule: #d8d1c0;
+  --rule2: #bdb4a0;
+
+  --ink: #14120e;
+  --ink-2: #4b463c;
+  --ink-3: #7a7266;
+  --ink-4: #9d9586;
+
+  --green: #145c3c;
+  --green-soft: rgba(20, 92, 60, 0.07);
+  --green-rule: rgba(20, 92, 60, 0.26);
+  --amber: #8a5a00;
+  --amber-soft: rgba(138, 90, 0, 0.08);
+  --amber-rule: rgba(138, 90, 0, 0.28);
+  --red: #993628;
+  --red-soft: rgba(153, 54, 40, 0.07);
+  --red-rule: rgba(153, 54, 40, 0.26);
+  --blue: #1e4c8f;
+  --blue-soft: rgba(30, 76, 143, 0.07);
+  --blue-rule: rgba(30, 76, 143, 0.24);
+
+  --rule-hair: rgba(20, 18, 14, 0.1);
 }
 
-html, body { @apply bg-bg; }
 html { scroll-behavior: smooth; }
+html, body { @apply bg-bg; }
 
 body {
   @apply text-txt-mid font-sans min-h-screen;
-  font-size: 14px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  background-image:
-    radial-gradient(1200px 520px at 10% -14%, rgba(var(--mint) / 0.10), transparent 60%),
-    radial-gradient(900px 420px at 92% -10%, rgba(var(--cool) / 0.07), transparent 60%);
-  background-repeat: no-repeat;
 }
 
-/* A film of noise is the difference between "black" and "designed black". Kept at 2.5% so it is
-   felt, not seen, and never animates. */
-body::after {
-  content: ""; position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+/* Paper fibre. The one texture in the system: a flat warm rectangle reads as a CSS default, a
+   slightly mottled one reads as printed matter. Fixed so it never scrolls, multiply so it darkens
+   rather than veils, and removed entirely where motion and effects are not wanted. */
+@media (prefers-reduced-motion: no-preference) {
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 70; pointer-events: none;
+    opacity: 0.045; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23f)'/%3E%3C/svg%3E");
+  }
 }
 
-h1, h2, h3 { @apply text-txt-hi font-semibold; letter-spacing: -0.025em; }
-::selection { background: rgba(var(--mint) / 0.28); color: #fff; }
+h1, h2, h3 { @apply text-txt-hi font-medium; font-family: var(--font-display), Georgia, serif; letter-spacing: -0.022em; }
+a { @apply no-underline; }
+::selection { background: var(--green-soft); color: var(--green); }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { @apply bg-line2 rounded-full; border: 3px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background: #3b3b45 content-box; }
+::-webkit-scrollbar-thumb { @apply bg-line2 rounded-full; border: 4px solid transparent; background-clip: content-box; }
 
 .tnum { font-variant-numeric: tabular-nums; }
-.label { @apply text-micro uppercase text-txt-dim font-medium; letter-spacing: 0.085em; }
-.eyebrow { @apply text-micro uppercase font-medium; letter-spacing: 0.14em; }
-
-/* ── surfaces ──────────────────────────────────────────────────────
-   Gradient hairline via a masked pseudo-element: a real light-falloff edge instead of a flat
-   1px border, which is the single cheapest thing that makes an interface look engineered. */
-.gcard, .card, .card-hero, .node, .btn-ghost {
-  position: relative; border-radius: 14px;
-  background: linear-gradient(180deg, #101014, #0c0c10);
-}
-.gcard::before, .card::before, .card-hero::before, .node::before, .btn-ghost::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 38%, rgba(255,255,255,0.055));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-}
-.card { box-shadow: 0 16px 44px -28px rgba(0, 0, 0, 0.9); }
-.card-hero {
-  border-radius: 18px; overflow: hidden;
-  box-shadow: 0 30px 90px -40px rgba(0, 0, 0, 0.95);
-}
-.card-hero::after {
-  content: ""; position: absolute; left: 8%; right: 8%; top: 0; height: 1px; z-index: 1;
-  background: linear-gradient(90deg, transparent, rgba(var(--mint) / 0.55), transparent);
-}
+/* Micro caps carry every label. Kept at 10.5px with wide tracking because a ledger caption is a
+   tag, not a sentence — and they only work if they are used consistently, at labels, never prose. */
+.label { @apply text-micro uppercase text-txt-dim font-medium; }
+.eyebrow { @apply text-micro uppercase font-medium; letter-spacing: 0.16em; }
 
 /* ── type ────────────────────────────────────────────────────────── */
 .display {
-  font-size: clamp(34px, 6.4vw, 62px); line-height: 1.02; letter-spacing: -0.038em;
-  font-weight: 600; color: #f6f6f9;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 500;
+  font-size: clamp(38px, 6.6vw, 76px);
+  line-height: 0.99;
+  letter-spacing: -0.028em;
+  @apply text-txt-hi;
 }
-.lede { font-size: clamp(15px, 2.1vw, 19px); line-height: 1.55; letter-spacing: -0.01em; }
-.grad-text {
-  background: linear-gradient(92deg, #f7f7fa 12%, rgba(var(--mint) / 0.95) 62%, #b9f3d6 88%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+/* The italic is the emphasis device now. A coloured word inside a headline is the tell of a
+   template; a serif italic in a typeset document is the tell of a designer. */
+.display i, .dek i, em.serif {
+  font-style: italic;
+  font-family: var(--font-display), Georgia, serif;
+  @apply text-txt-hi;
+}
+.dek { font-size: clamp(15.5px, 1.7vw, 18.5px); line-height: 1.62; letter-spacing: -0.006em; @apply text-txt-mid; }
+.lede { font-size: clamp(15px, 1.6vw, 17.5px); line-height: 1.6; @apply text-txt-mid; }
+.fig { @apply font-mono tnum text-txt-hi; font-weight: 500; letter-spacing: -0.03em; }
+
+/* ── surfaces ──────────────────────────────────────────────────────
+   A form on paper: 1px rule, 2px corner, no shadow, no blur. The heavy top rule on .card-hero is
+   the register mark — the thing that says "this sheet was printed", not "this div was bordered".
+   ───────────────────────────────────────────────────────────────── */
+.gcard, .card, .panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+.gcard { background: var(--paper); }
+.card-hero {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-top: 2px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.inkband {
+  background: var(--ink);
+  color: rgba(242, 239, 232, 0.78);
+  border-radius: 2px;
+}
+.inkband h2, .inkband h3 { color: var(--paper); }
+.inkband .label { color: rgba(242, 239, 232, 0.5); }
+
+.hairline-b { border-bottom: 1px solid var(--rule); }
+.top-rule { border-top: 1px solid var(--rule); }
+
+/* ── sections ────────────────────────────────────────────────────────
+   The page is a document with numbered sections, so the section is the unit, not the card. The
+   number sits in the left gutter at every width, which is also what stops the layout reading as a
+   stack of panels. */
+.sect { border-top: 1px solid var(--rule); padding-top: 20px; }
+.sect-no { @apply font-mono text-micro text-txt-dim tnum; }
+.sect-grid { display: grid; gap: 24px; grid-template-columns: 1fr; }
+@media (min-width: 1024px) { .sect-grid { grid-template-columns: 148px 1fr; gap: 40px; } }
+
+/* The figure band: two by two, with a rule only on columns that have a neighbour to their left.
+   Drawn in CSS rather than in the class list, so the rule can never disagree with the layout at a
+   new breakpoint. */
+.figs { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 24px; border-top: 1px solid var(--rule); padding-top: 18px; }
+@media (min-width: 560px) {
+  .figs > :nth-child(even) { border-left: 1px solid var(--rule); padding-left: 22px; }
 }
 
-/* ── controls ────────────────────────────────────────────────────── */
+/* ── ledger ────────────────────────────────────────────────────── */
+.ledger { border-top: 1px solid var(--rule); }
+.ledger > * {
+  border-bottom: 1px solid var(--rule);
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 22px 1fr auto;
+  padding: 11px 2px;
+}
+.ledger > *:hover { background: var(--green-soft); }
+.ledger .k { @apply font-mono tnum text-txt-hi; font-size: 21px; font-weight: 500; letter-spacing: -0.02em; }
+.ledger .n { @apply text-sm2 text-txt-hi; }
+.ledger .d { @apply text-xs2 text-txt-lo; }
+
+/* ── controls ───────────────────────────────────────────────────── */
 .btn {
-  @apply inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm2 font-medium
-         transition-all duration-150 select-none;
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg2 text-sm2 font-medium
+         transition-colors duration-150 select-none whitespace-nowrap;
+  border: 1px solid transparent;
 }
-.btn-primary {
-  color: #05100b; background: linear-gradient(180deg, #58e0a4, #34c484);
-  box-shadow: 0 0 0 1px rgba(var(--mint) / 0.5), 0 10px 30px -12px rgba(var(--mint) / 0.5),
-              0 1px 0 rgba(255, 255, 255, 0.35) inset;
-}
-.btn-primary:hover { filter: brightness(1.07); transform: translateY(-1px); }
-.btn-primary:active { transform: translateY(0); filter: brightness(0.97); }
-.btn-ghost { @apply text-txt-mid; padding: 8px 14px; }
-.btn-ghost:hover { @apply text-txt-hi; background: linear-gradient(180deg, #16161b, #101014); }
+.btn-primary { background: var(--ink); color: var(--paper); }
+.btn-primary:hover { background: #2a2620; }
+.btn-primary:active { transform: translateY(1px); }
+.btn-ghost { @apply text-txt-hi; border-color: var(--rule2); background: var(--panel); }
+.btn-ghost:hover { background: var(--hover); }
 .btn:disabled { @apply opacity-40 pointer-events-none; }
+.inkband .btn-ghost { border-color: rgba(242, 239, 232, 0.32); color: var(--paper); background: transparent; }
+.inkband .btn-ghost:hover { background: rgba(242, 239, 232, 0.1); }
+.inkband .btn-primary { background: var(--paper); color: var(--ink); }
+.inkband .btn-primary:hover { background: #fff; }
 
-.chip { @apply inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-line bg-raised text-micro text-txt-lo whitespace-nowrap; }
+/* Stamps, not pills. Status marks in this system are square, mono, uppercase and hairline-ruled —
+   the way a document marks a line as booked, held or void. */
+.stamp {
+  @apply inline-flex items-center gap-1.5 font-mono text-micro uppercase px-1.5 py-0.5 rounded-lg2 whitespace-nowrap;
+  border: 1px solid var(--rule); color: var(--ink-3); background: var(--inset);
+}
+.stamp-ok { border-color: var(--green-rule); color: var(--green); background: var(--green-soft); }
+.stamp-hold { border-color: var(--amber-rule); color: var(--amber); background: var(--amber-soft); }
+.stamp-stop { border-color: var(--red-rule); color: var(--red); background: var(--red-soft); }
+.chip { @apply inline-flex items-center gap-1.5 px-2 py-1 rounded-lg2 border border-line bg-surface text-micro text-txt-lo whitespace-nowrap; }
 .chip-acc { @apply border-acc-line bg-acc-soft text-acc; }
 .chip-hold { @apply border-hold-line bg-hold-soft text-hold; }
-.kbd { @apply inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded border border-line2 bg-surface text-[10px] font-mono text-txt-mid; }
+.kbd { @apply inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded-lg2 border border-line2 bg-surface text-[10px] font-mono text-txt-mid; }
 
-/* ── the flow canvas ─────────────────────────────────────────────── */
-.node {
-  @apply relative w-[104px] sm:w-[120px] shrink-0 rounded-xl px-3 py-2.5;
-  border-radius: 13px;
-}
-.node-live { box-shadow: 0 0 0 1px rgba(var(--mint) / 0.22), 0 14px 36px -18px rgba(var(--mint) / 0.34); }
-.node-live::before { background: linear-gradient(180deg, rgba(var(--mint) / 0.55), rgba(255,255,255,0.02) 60%); }
-.node-write { background: linear-gradient(180deg, rgba(var(--mint) / 0.10), rgba(12,12,16,0.9)); }
-.node-hold { box-shadow: 0 0 0 1px rgba(var(--amber) / 0.22), 0 14px 36px -18px rgba(var(--amber) / 0.26); }
+/* ── the run ────────────────────────────────────────────────────── */
+.node { @apply relative px-3 py-2.5; border-radius: 2px; }
+.node-live { background: var(--green-soft); box-shadow: inset 2px 0 0 var(--green); }
+.node-write { background: var(--green-soft); }
+.node-hold { background: var(--amber-soft); box-shadow: inset 2px 0 0 var(--amber); }
 
-.rail { @apply relative h-px bg-line2 w-7 sm:w-10 shrink-0 self-center; }
+.rail { @apply relative h-px bg-line2 w-6 sm:w-9 shrink-0 self-center; }
 .token {
-  position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 999px;
-  background: rgb(var(--mint)); box-shadow: 0 0 12px 3px rgba(var(--mint) / 0.55);
-  animation: travel 1.5s linear infinite;
+  position: absolute; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 1px;
+  background: var(--green); animation: travel 1.4s linear infinite;
 }
 @keyframes travel {
-  0%   { left: -6px; opacity: 0; }
-  18%  { opacity: 1; }
-  82%  { opacity: 1; }
-  100% { left: 100%; opacity: 0; }
+  0% { left: -4px; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { left: 100%; opacity: 0; }
 }
-.meter { @apply h-[3px] w-full rounded-full bg-line overflow-hidden; }
-.meter > i { @apply block h-full rounded-full; background: linear-gradient(90deg, rgba(var(--mint) / 0.5), rgb(var(--mint))); transition: width 460ms cubic-bezier(.2,.7,.3,1); }
+/* The meter is a fill inside a ruled field, the way a form shows a portion of a total. Ink means
+   "the batch walked through here"; amber means a gate dropped documents at this line; green is
+   reserved for the write, so that the only green bar on the sheet is the one that matters. */
+.meter { @apply w-full overflow-hidden; height: 5px; background: var(--inset); border: 1px solid var(--rule); }
+.meter > i { @apply block h-full; background: var(--ink); transition: width 460ms cubic-bezier(0.2, 0.7, 0.3, 1); }
+.meter.hold > i { background: var(--amber); }
+.meter.write > i { background: var(--green); }
 
-.live-dot { @apply inline-block w-1.5 h-1.5 rounded-full bg-line2 shrink-0; }
-.live-dot.on { @apply bg-acc; animation: pulse 1.8s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 1; transform: scale(1.4); } }
+.live-dot { @apply inline-block w-1.5 h-1.5 shrink-0; border-radius: 1px; background: var(--rule2); }
+.live-dot.on { background: var(--green); animation: pulse 1.7s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 
-.sheen { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.sheen::after {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 30%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.055), transparent);
-  animation: sheen 2.8s ease-in-out infinite;
+/* One moving element in the whole system, and it only exists while a run is actually in flight:
+   a feed line crossing the sheet the way a print head does. */
+.feed { position: absolute; left: 0; right: 0; top: 0; height: 1px; overflow: hidden; pointer-events: none; }
+.feed::after {
+  content: ""; position: absolute; top: 0; height: 1px; width: 34%;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  animation: feed 1.5s linear infinite;
 }
-@keyframes sheen { 0% { transform: translateX(-130%); } 100% { transform: translateX(330%); } }
+@keyframes feed { 0% { transform: translateX(-110%); } 100% { transform: translateX(300%); } }
 
 .rowin { animation: flash 900ms ease-out; }
-@keyframes flash { 0% { background-color: rgba(var(--mint) / 0.17); } 100% { background-color: transparent; } }
-.rise { animation: rise 320ms cubic-bezier(.2,.7,.3,1) both; }
-@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.hairline-b { border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.09), rgba(255,255,255,0.02)) 1; }
+@keyframes flash { 0% { background-color: var(--green-soft); } 100% { background-color: transparent; } }
+.rise { animation: rise 240ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 
-input, textarea { @apply caret-acc; }
-textarea:focus-visible, input:focus-visible {
-  outline: none; @apply border-acc-line bg-raised;
-  box-shadow: 0 0 0 3px rgba(var(--mint) / 0.10);
+/* ── masthead ───────────────────────────────────────────────────── */
+.mast { background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: saturate(1.1) blur(8px); }
+.mast-name { font-family: var(--font-display), Georgia, serif; font-weight: 500; letter-spacing: -0.015em; }
+.toclink { @apply relative font-mono text-micro uppercase px-2 py-2 whitespace-nowrap; color: var(--ink-3); }
+.toclink:hover { color: var(--ink); }
+.toclink.on { color: var(--ink); }
+.toclink.on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: var(--ink); }
+
+input, textarea, select { @apply caret-acc; }
+textarea, input {
+  background: var(--panel); border: 1px solid var(--rule2); border-radius: 2px;
+  @apply text-sm2 text-txt-hi placeholder-txt-dim;
 }
-button:focus-visible, a:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(var(--mint) / 0.5); border-radius: 8px; }
-a { @apply no-underline; }
+textarea:focus-visible, input:focus-visible {
+  outline: none; border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+button:focus-visible, a:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ink); border-radius: 2px; }
+table { border-collapse: collapse; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
   html { scroll-behavior: auto; }
+  body::after { display: none; }
+}
+
+/* An inverted band needs its own prose colour, or the paragraph inherits the page's dark ink and
+   disappears into the background. */
+.inkband p { color: rgba(242, 239, 232, 0.68); }
+.inkband .font-mono { color: rgba(242, 239, 232, 0.5); }
+
+/* ── widths where a block should not exist ─────────────────────────
+   Hand-written rather than `lg:block` on the element: this file is loaded after the utilities
+   layer, and a rule that hides something on a phone should not depend on which stylesheet wins. */
+@media (max-width: 1023px) { .only-lg { display: none; } }
+
+/* An empty detail pane. `card` here would be a near-white rectangle on warm paper, which reads as
+   a rendering fault rather than a form waiting to be filled — so: the page's own colour, a dashed
+   rule, and the line that says what goes in it. */
+.pane-wait {
+  display: grid; place-items: center; align-content: center; text-align: center;
+  min-height: 240px; padding: 40px 20px; height: auto; align-self: stretch;
+  background: var(--paper); border: 1px dashed var(--rule2); border-radius: 2px;
 }

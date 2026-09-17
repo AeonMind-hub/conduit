@@ -93,7 +93,7 @@ export default function ExceptionsClient({ initial }: { initial: Store }) {
   /* ── empty ─────────────────────────────────────────────── */
   if (queue.length === 0) {
     return (
-      <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto">
+      <div className="">
         <PageHead title="Held" meta="documents the system would not commit on its own" />
         <div className="card py-16 text-center">
           <div className="w-11 h-11 rounded-xl2 bg-acc-soft border border-acc-line grid place-items-center mx-auto mb-4">
@@ -290,13 +290,15 @@ export default function ExceptionsClient({ initial }: { initial: Store }) {
       </div>
     </div>
   ) : (
-    <div className="card h-full grid place-items-center py-20">
-      <p className="text-sm2 text-txt-lo">Select a document to review</p>
+    <div className="pane-wait">
+      <p className="text-[15px] text-txt-lo">Select a document to review</p>
+      <p className="text-micro text-txt-dim mt-2.5 leading-relaxed max-w-[38ch] text-center">Three are waiting: the $18,420 invoice with no PO reference, an email with nothing
+        bookable in it, and a quote that arrived labelled as an order.</p>
     </div>
   );
 
   return (
-    <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto lg:h-[calc(100vh-2.5rem)] lg:flex lg:flex-col">
+    <div className="lg:flex lg:flex-col">
       <PageHead title="Held"
         meta={`${queue.length} waiting · ${store.stats.autoCommitted} committed automatically`}
         actions={
