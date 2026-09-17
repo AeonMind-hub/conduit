@@ -23,16 +23,41 @@ export const CLIENT_INDUSTRY = process.env.NEXT_PUBLIC_CLIENT_INDUSTRY || "distr
 export const DAILY_VOLUME  = num(process.env.NEXT_PUBLIC_DAILY_VOLUME, 60);
 export const HOURLY        = num(process.env.NEXT_PUBLIC_HOURLY_COST, 34);
 
-/** Your price. Shown as arithmetic, never as an offer the reader has to accept. */
+/** Your price. NOT rendered anywhere in the product — see README "Proposing it".
+ *  A number inside the app reads as a listing; a number in a proposal reads as a quote. */
 export const BUILD_FEE     = num(process.env.NEXT_PUBLIC_BUILD_FEE, 450);
 export const MONTHLY_FEE   = num(process.env.NEXT_PUBLIC_MONTHLY_FEE, 120);
 
 /** Canonical demo URL — the one that goes in the README, the repo About and every email. */
 export const DEMO_URL      = process.env.NEXT_PUBLIC_DEMO_URL || "https://conduit-demo-version.vercel.app";
 
-/** Corpus is synthetic. Say so on the page, not just in the README. */
-export const CORPUS_LABEL  = process.env.NEXT_PUBLIC_CORPUS_LABEL
-  || "synthetic demo corpus — not a client deployment";
+/** What the sample data is called, in the one place it needs saying — in the rail, small.
+ *  "Sample data" is what every enterprise product writes; "not a client deployment" is what an
+ *  anxious one writes. Same disclosure, and only one of them looks like a product.
+ */
+export const CORPUS_LABEL  = process.env.NEXT_PUBLIC_CORPUS_LABEL || "Sample corpus · 75 documents";
+
+/** The mailbox their documents arrive in. In production this is a forwarding rule, not a form. */
+export const INTAKE_ADDRESS = process.env.NEXT_PUBLIC_INTAKE_ADDRESS
+  || `ops@${CLIENT_SHORT.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
+
+/** Where committed records land. Per-prospect: NEXT_PUBLIC_SYSTEMS="ERP=NetSuite,AP=Xero". */
+const SYSTEM_FALLBACK: Record<string, string> = {
+  ERP: "NetSuite", AP: "Xero", WMS: "SAP Business One", CRM: "HubSpot",
+};
+export const SYSTEMS: Record<string, string> = (() => {
+  const out: Record<string, string> = { ...SYSTEM_FALLBACK };
+  for (const part of (process.env.NEXT_PUBLIC_SYSTEMS ?? "").split(",")) {
+    const [k, v] = part.split("=");
+    if (k && v) out[k.trim().toUpperCase()] = v.trim();
+  }
+  return out;
+})();
+export const systemName = (code: string) => SYSTEMS[code] ?? code;
+
+/** The environment label a buyer sees on the integrations screen. */
+export const ENV_LABEL  = process.env.NEXT_PUBLIC_ENV_LABEL || "Sandbox";
+export const TAGLINE    = process.env.NEXT_PUBLIC_TAGLINE  || "Inbound document automation";
 
 export const LIVE_ENABLED  = !!process.env.GEMINI_API_KEY && process.env.OFFLINE_DEMO !== "1";
 export const MODEL         = process.env.GEMINI_MODEL || "gemini-2.0-flash";

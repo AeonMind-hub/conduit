@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CLIENT_SHORT, CORPUS_LABEL } from "@/lib/config";
+import { CLIENT_SHORT, CORPUS_LABEL, INTAKE_ADDRESS, SYSTEMS, TAGLINE } from "@/lib/config";
 import { useEffect, useState } from "react";
 
 /* Icons kept as small inline paths — no icon library, no extra weight. */
@@ -11,12 +11,14 @@ const I = {
   hold: "M12 8v5m0 3v.5M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z",
   rec: "M4 5h16M4 10h16M4 15h10M4 20h7",
   chart: "M4 20V10m5 10V4m5 16v-7m5 7V8",
+  link: "M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-1.5 1.5M13.5 17.5 12 19a4 4 0 0 1-6-6l1.5-1.5",
 };
 
 const NAV = [
   { href: "/",           label: "Operations", icon: I.ops },
   { href: "/exceptions", label: "Held",       icon: I.hold, badge: true },
   { href: "/records",    label: "Records",    icon: I.rec },
+  { href: "/connections", label: "Connections", icon: I.link },
   { href: "/analytics",  label: "Analytics",  icon: I.chart },
 ];
 
@@ -47,7 +49,7 @@ export default function Shell({
           </div>
           <div className="leading-tight min-w-0">
             <div className="text-sm2 font-semibold text-txt-hi truncate">Conduit</div>
-            <div className="text-micro text-txt-dim truncate">{CLIENT_SHORT}</div>
+            <div className="text-micro text-txt-dim truncate">{CLIENT_SHORT} · {TAGLINE.toLowerCase()}</div>
           </div>
         </div>
 
@@ -71,11 +73,14 @@ export default function Shell({
         </nav>
 
         <div className="p-3 border-t border-line space-y-1.5">
-          <div className="flex items-center gap-2 text-micro">
+          <Link href="/connections" className="flex items-center gap-2 text-micro group">
             <span className="w-1.5 h-1.5 rounded-full bg-acc shrink-0" />
-            <span className="text-txt-lo truncate">ops@northwindsupply.com</span>
+            <span className="text-txt-lo truncate group-hover:text-txt-mid">{INTAKE_ADDRESS}</span>
+          </Link>
+          <div className="text-micro text-txt-dim">
+            {Object.keys(SYSTEMS).length} destinations configured
           </div>
-          <div className="text-micro text-txt-dim">Connected · 4 systems</div>
+          <div className="text-micro text-txt-dim/80 pt-1 mt-1 border-t border-line">{CORPUS_LABEL}</div>
         </div>
       </aside>
 
@@ -87,14 +92,14 @@ export default function Shell({
             <div className="w-[7px] h-[7px] rounded-[2px] bg-acc" />
           </div>
           <span className="text-sm2 font-semibold text-txt-hi">Conduit</span>
-          <span className="ml-auto text-micro text-txt-dim">Northwind Supply</span>
+          <span className="ml-auto text-micro text-txt-dim">{CLIENT_SHORT}</span>
         </header>
 
         <div className="flex-1 min-w-0 pb-16 md:pb-0">{children}</div>
       </div>
 
       {/* ── mobile bottom tabs ───────────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 border-t border-line bg-surface/95 backdrop-blur-md grid grid-cols-4">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 border-t border-line bg-surface/95 backdrop-blur-md grid grid-cols-5">
         {NAV.map(n => {
           const on = pathname === n.href;
           return (

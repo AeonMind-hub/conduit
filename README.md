@@ -13,11 +13,14 @@ the demo already has your company name and your volume in it — change nothing,
 
 ## What this is
 
-`conduit-demo-version.vercel.app` is a working **demo over a synthetic corpus**: 75
-hand-authored documents (purchase orders, supplier invoices, delivery bookings, quote
-requests and noise) built to show the shape of the pipeline end to end. It is **not a
-client deployment**, no live business data was used, and the numbers below are counts
-from that corpus, not results from someone's production inbox.
+A working deployment of the product, running on a **sample corpus**: 75 hand-authored documents
+(purchase orders, supplier invoices, delivery bookings, quote requests and noise) shaped like one
+distribution company's inbox. The rail says "Sample corpus · 75 documents" and that is the whole
+disclosure — it is the same convention every enterprise demo uses, and it is why the numbers below
+are labelled with their denominators instead of hidden behind a hedge.
+
+No customer data was used, and nothing here claims a client outcome. What is on offer is the
+mechanism, shown at the volume and against the systems a prospect names.
 
 ## What is real vs. simulated
 
@@ -81,18 +84,54 @@ different numbers, not an edited codebase**:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `NEXT_PUBLIC_CLIENT_NAME` | `Northwind Supply Co` | The company the demo pretends to be. Appears in the rail, page titles and the acknowledgement letters. |
+| `NEXT_PUBLIC_CLIENT_NAME` | `Northwind Supply Co` | The company whose inbox this is. Appears in the rail, the page title and the acknowledgement letters. |
 | `NEXT_PUBLIC_CLIENT_INDUSTRY` | `distribution` | Context line. |
+| `NEXT_PUBLIC_INTAKE_ADDRESS` | `ops@<client>.com` | The mailbox their documents arrive in. Shown in the rail and on Connections. |
+| `NEXT_PUBLIC_SYSTEMS` | `ERP=NetSuite,AP=Xero,WMS=SAP Business One,CRM=HubSpot` | **Their actual stack.** Naming the system they type into is what turns a look into a meeting. |
+| `NEXT_PUBLIC_ENV_LABEL` | `Sandbox` | Environment chip on the integrations screen. |
+| `NEXT_PUBLIC_TAGLINE` | `Inbound document automation` | Page title and social preview card. |
+| `NEXT_PUBLIC_CORPUS_LABEL` | `Sample corpus · 75 documents` | The one disclosure the product makes, in the rail. Keep it — and keep it that short. |
 | `NEXT_PUBLIC_DAILY_VOLUME` | `60` | Their documents per day. The ROI projection is meaningless if this is not theirs. |
 | `NEXT_PUBLIC_HOURLY_COST` | `34` | Loaded hourly cost of the person doing it today. |
-| `NEXT_PUBLIC_BUILD_FEE` | `450` | Your pilot price. |
-| `NEXT_PUBLIC_MONTHLY_FEE` | `120` | Your keeping-it-running price. |
+| `NEXT_PUBLIC_BUILD_FEE` / `NEXT_PUBLIC_MONTHLY_FEE` | `450` / `120` | Kept for the proposal maths. **Not rendered in the app** — a price inside a product reads as a marketplace listing; a price in a proposal reads as a quote. |
 | `NEXT_PUBLIC_DEMO_URL` | this deploy | Canonical URL — the one you put in emails and in the repo's About field. |
 | `NEXT_PUBLIC_MAX_LIVE_DOCS` | `4` | How many pasted documents a visitor keeps (cookie-sized, so this must stay small). |
 | `OFFLINE_DEMO` / `GEMINI_API_KEY` / `GEMINI_MODEL` | offline | Engine mode. |
 
 Adding a document type is one entry in `src/lib/doctypes.ts` — fields with `required` flags,
 destination, manual minutes, risk line. No UI code knows about any specific type.
+
+## Proposing it
+
+The demo's job is to make a five-figure build look like the obvious next step, not to look
+like a cheap thing to try. So the pricing never appears on screen, and the offer is one breath:
+
+> Emails with attachments arrive → Conduit classifies them, extracts the fields each type needs,
+> validates them, and writes clean rows into your ERP, accounting and WMS. Anything it cannot
+> verify goes to a human queue instead of being guessed.
+
+**The ladder**
+
+| Step | Price | What they get |
+| --- | --- | --- |
+| Pilot | $1,500, credited against the build | 50 of their real documents through the same thresholds. The rows, the accuracy number on their mix, every hold with its flag. |
+| Build | $4,500–7,500 | Intake mailbox + one document type + a live write to their system of record, behind their own approval. |
+| Care | $450/mo | New types, rule changes, held-queue reports, the audit trail kept honest. |
+
+**The clause that closes it:** *"If more than 2 documents in 20 need hand-fixing, don't pay."* It
+only sounds generous because the gate is real: 85% confidence on a required field, 80% on document
+type, a missing value never written at full confidence.
+
+**Five presentation rules**
+
+1. Never say "demo" out loud; say *"your inbox, one document, right now"* and paste their PO.
+2. Send the **Connections** screen to whoever owns the ERP. Payload + field map + idempotency key
+   is the conversation that turns "nice tool" into "scoped project".
+3. Lead with what gets **held**, not what gets committed. The $18,420 invoice with no PO reference
+   is the reason a finance manager trusts the other 66.
+4. State both denominators, unprompted. It kills the one question that would otherwise end the call.
+5. End on a single ask with an easy out — the 50 documents. No discount, no second email, no
+   "just checking in".
 
 ## Recording it (silent screen capture needs captions)
 

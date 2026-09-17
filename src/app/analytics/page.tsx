@@ -4,7 +4,7 @@ import { rates, pct } from "@/lib/types";
 import { TypeTag } from "@/components/Pipeline";
 import PageHead from "@/components/PageHead";
 import {
-  CLIENT_NAME, DAILY_VOLUME, HOURLY, BUILD_FEE, MONTHLY_FEE, CORPUS_LABEL, engineLabel,
+  CLIENT_NAME, DAILY_VOLUME, HOURLY, engineLabel, INTAKE_ADDRESS,
 } from "@/lib/config";
 
 import { visitorState } from "@/lib/wire-http";
@@ -45,7 +45,7 @@ export default async function AnalyticsPage() {
   return (
     <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5 space-y-3">
       <PageHead title="Analytics"
-        meta={`measured on ${stats.total} documents · ${engineLabel()} · ${CORPUS_LABEL} · projected at ${DAILY_VOLUME}/day for ${CLIENT_NAME}`} />
+        meta={`${CLIENT_NAME} · measured on ${stats.total} documents · intake ${INTAKE_ADDRESS} · projected at ${DAILY_VOLUME}/day · ${engineLabel()}`} />
 
       {empty ? (
         <div className="rounded-xl2 border border-acc-line bg-acc-soft px-5 py-6">
@@ -157,39 +157,26 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {!empty && (
-        <div className="rounded-xl2 border border-line bg-surface px-4 py-3.5">
-          <div className="text-micro label mb-2">What a build actually costs against that</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm2">
-            <div>
-              <div className="text-micro text-txt-dim mb-1">Pilot build, one document type</div>
-              <div className="text-txt-hi font-semibold tnum">${BUILD_FEE.toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-micro text-txt-dim mb-1">Keeping it running</div>
-              <div className="text-txt-hi font-semibold tnum">${MONTHLY_FEE.toLocaleString()}/mo</div>
-            </div>
-            <div>
-              <div className="text-micro text-txt-dim mb-1">First year, all in</div>
-              <div className="text-txt-hi font-semibold tnum">
-                ${(BUILD_FEE + MONTHLY_FEE * 12).toLocaleString()}
-              </div>
-            </div>
-            <div>
-              <div className="text-micro text-txt-dim mb-1">Against the ${annual.toLocaleString()} above</div>
-              <div className="text-acc font-semibold tnum">
-                {annual > 0 ? `${(annual / (BUILD_FEE + MONTHLY_FEE * 12)).toFixed(1)}×` : "—"}
-              </div>
-            </div>
-          </div>
-          <p className="text-micro text-txt-dim mt-2.5 leading-relaxed">
-            The multiple is only as good as the volume and minute figures, which you can change. It assumes
-            the held queue stays about this size and that nobody re-keys a committed record. If the accuracy
-            on your own documents is not there, the honest answer is to stop — that is why a pilot runs on
-            your paper first, not on this corpus.
+      <div className="rounded-xl2 border border-line bg-surface px-4 py-3.5">
+        <div className="text-micro label mb-2">How this gets verified, before anyone is asked to believe it</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-micro text-txt-lo leading-relaxed">
+          <p>
+            <span className="text-txt-mid">Your paper, not this corpus.</span> Fifty documents out of
+            your inbox go through the same thresholds. You get the rows, the accuracy number on your
+            own mix, and every held item with the flag that stopped it.
+          </p>
+          <p>
+            <span className="text-txt-mid">A bar agreed in writing.</span> First-pass counted both ways
+            — of everything received, and of the actionable ones. Below the number we agreed, it stops,
+            nothing is written, and nobody owes anything.
+          </p>
+          <p>
+            <span className="text-txt-mid">A queue you own.</span> Holds route to whoever you name, with
+            the field that failed and why. Every committed row exports with its confidence and its
+            corrections, so this screen is a report your accountant can read, not a pitch.
           </p>
         </div>
-      )}
+      </div>
     </div>
   );
 }

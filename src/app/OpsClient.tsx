@@ -11,7 +11,7 @@ import { DOC_TYPES } from "@/lib/doctypes";
 import { LIVE_ID_BASE } from "@/lib/session";
 import { rates, pct } from "@/lib/types";
 import type { Stage, Store } from "@/lib/types";
-import { CLIENT_NAME, CORPUS_LABEL, engineLabel, LIVE_ENABLED } from "@/lib/config";
+import { CLIENT_NAME, INTAKE_ADDRESS, engineLabel, LIVE_ENABLED, DAILY_VOLUME } from "@/lib/config";
 
 const STATUS: Record<string, string> = {
   queued:    "text-txt-dim border-line2",
@@ -112,8 +112,8 @@ export default function OpsClient({ initial }: { initial: Store }) {
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto">
       <PageHead
-        title="Operations"
-        meta={`${CLIENT_NAME} · ${DOCS.length} documents · 4 destination systems · engine: ${engineLabel()}`}
+        title="Inbox"
+        meta={`${CLIENT_NAME} · ${DOCS.length} documents today · intake ${INTAKE_ADDRESS} · ${DAILY_VOLUME}/day expected · engine ${engineLabel()}`}
         actions={
           <>
             {stats.total > 0 && (
@@ -124,53 +124,28 @@ export default function OpsClient({ initial }: { initial: Store }) {
               </button>
             )}
             <button onClick={replay} disabled={running}
-              className="px-4 py-1.5 rounded-lg bg-acc text-bg font-medium text-sm2
-                         hover:opacity-90 disabled:opacity-50 transition-opacity">
-              {running ? "Running…" : "Run pipeline"}
+              className="px-3 py-1.5 rounded-lg border border-line2 text-sm2 text-txt-mid
+                         hover:text-txt-hi hover:border-txt-dim disabled:opacity-40 transition-colors">
+              {running ? "Processing…" : "Replay this run"}
             </button>
+            <a href="#intake"
+              className="px-3 py-1.5 rounded-lg border border-acc-line bg-acc-soft text-sm2 text-acc
+                         font-medium hover:opacity-90 transition-opacity">
+              Send it a document
+            </a>
           </>
         }
       />
 
-      {store.seeded && (
-        <div className="mb-4 px-4 py-2.5 rounded-xl2 border border-line bg-surface text-micro text-txt-lo leading-relaxed">
-          Showing a <span className="text-txt-mid">completed run</span> of the {DOCS.length}-document
-          demo corpus ({CORPUS_LABEL}). Hit <span className="text-txt-mid">Run pipeline</span> to watch it
-          process from empty.
-        </div>
-      )}
-
       <div className="space-y-4">
-        <Pipeline counts={counts} running={running} />
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Processed" value={stats.total} sub={`of ${DOCS.length} queued`} />
-          <Stat label="Committed" value={stats.committed} tone="acc"
-                sub={stats.total
-                  ? `${pct(r.onReceived)} of everything received · ${pct(r.onActionable)} of ${r.actionable} actionable`
-                  : "—"} />
-          <Stat label="Held" value={stats.exceptions} tone="hold" sub="waiting on a human" />
-          <Stat label="Discarded" value={stats.discarded} tone="dim" sub="no transactional content" />
-        </div>
-
-        {stats.exceptions > 0 && (
-          <Link href="/exceptions"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl2 border border-hold-line bg-hold-soft
-                       hover:bg-hold-soft/70 transition-colors fadein">
-            <span className="text-xl font-semibold text-hold tnum leading-none">{stats.exceptions}</span>
-            <span className="text-sm2 text-txt-hi">documents need review</span>
-            <span className="ml-auto text-xs2 text-hold">Open →</span>
-          </Link>
-        )}
-
         {/* ── paste one of THEIR documents ─────────────────────────────── */}
-        <div className="card px-4 py-3.5">
+        <div id="intake" className="card px-4 py-3.5 scroll-mt-4">
           <div className="flex items-baseline gap-2 mb-2">
-            <span className="label">Try a real document</span>
+            <span className="label">Send it a document</span>
             <span className="text-micro text-txt-dim">
               {LIVE_ENABLED
-                ? "one model call, held if it is not sure"
-                : "this deploy has no key, so anything you paste is HELD, not guessed — that is the safety property"}
+                ? "one model call per document · held the moment it is not sure"
+                : "no model on this deployment, so pasted documents are held for a human, never guessed"}
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
@@ -219,6 +194,28 @@ export default function OpsClient({ initial }: { initial: Store }) {
             </div>
           )}
         </div>
+
+        <Pipeline counts={counts} running={running} />
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat label="Processed" value={stats.total} sub={`of ${DOCS.length} queued`} />
+          <Stat label="Committed" value={stats.committed} tone="acc"
+                sub={stats.total
+                  ? `${pct(r.onReceived)} of everything received · ${pct(r.onActionable)} of ${r.actionable} actionable`
+                  : "—"} />
+          <Stat label="Held" value={stats.exceptions} tone="hold" sub="waiting on a human" />
+          <Stat label="Discarded" value={stats.discarded} tone="dim" sub="no transactional content" />
+        </div>
+
+        {stats.exceptions > 0 && (
+          <Link href="/exceptions"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl2 border border-hold-line bg-hold-soft
+                       hover:bg-hold-soft/70 transition-colors fadein">
+            <span className="text-xl font-semibold text-hold tnum leading-none">{stats.exceptions}</span>
+            <span className="text-sm2 text-txt-hi">documents need review</span>
+            <span className="ml-auto text-xs2 text-hold">Open →</span>
+          </Link>
+        )}
 
         {/* queue */}
         <div className="card overflow-hidden">

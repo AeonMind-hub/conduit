@@ -23,6 +23,27 @@ export default function RecordsClient({ initial }: { initial: Store }) {
     () => filter === "all" ? records : records.filter(r => r.type === filter),
     [records, filter]
   );
+  /* The pilot's deliverable is a file of rows, so the product hands one over on the spot. */
+  const exportCsv = () => {
+    const keys = [...new Set(records.flatMap(x => Object.keys(x.cells)))].sort();
+    const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const head = ["reference", "document_type", "destination", "received", "committed_by",
+                  "corrected_by_human", "engine", ...keys];
+    const body = records.map(x => {
+      const src = Object.values(store.processed).find(p => p.doc.id === x.sourceDocId)?.doc;
+      return [q(x.ref), q(x.type), q(x.destination), q(src?.receivedAt ?? ""),
+              q(x.auto ? "conduit" : "human_review"), q(x.correctedFields.join("|")),
+              q(x.engine ?? "fixture"), ...keys.map(k => q(x.cells[k] ?? ""))].join(",");
+    });
+    const blob = new Blob([[head.map(q).join(","), ...body].join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `conduit-records-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const rec = records.find(r => r.id === openId) ?? null;
   const def = rec ? DOC_TYPES[rec.type] : null;
 
@@ -32,7 +53,7 @@ export default function RecordsClient({ initial }: { initial: Store }) {
         <PageHead title="Records" meta="committed to your systems" />
         <div className="card py-16 text-center">
           <p className="text-sm2 text-txt-lo">Nothing committed yet.</p>
-          <p className="text-xs2 text-txt-dim mt-1">Run the pipeline from Operations.</p>
+          <p className="text-xs2 text-txt-dim mt-1">Nothing has been committed yet.</p>
         </div>
       </div>
     );
@@ -181,7 +202,14 @@ export default function RecordsClient({ initial }: { initial: Store }) {
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto lg:h-[calc(100vh-2.5rem)] lg:flex lg:flex-col">
       <PageHead title="Records"
-        meta={`${records.length} committed across 4 systems · click any record to see what it did`} />
+        meta={`${records.length} committed across 4 systems · click any record to see what it did`}
+        actions={
+          <button onClick={exportCsv}
+            className="px-3 py-1.5 rounded-lg border border-line2 text-sm2 text-txt-mid
+                       hover:text-txt-hi hover:border-txt-dim transition-colors">
+            Export CSV ({records.length} rows)
+          </button>
+        } />
       <div className={`lg:grid lg:grid-cols-[340px_1fr] lg:gap-4 lg:flex-1 lg:min-h-0
                        ${openId !== null ? "hidden lg:grid" : ""}`}>
         {list}

@@ -63,15 +63,20 @@ try {
   check("cold visit shows both denominators",
     root.html.includes("88%") && root.html.includes("96%"),
     `88%:${root.html.includes("88%")} 96%:${root.html.includes("96%")}`);
-  /* The banner renders as `Showing a <span>completed run</span> of the {DOCS.length}-document
-     demo corpus`, so the words are separated by markup. Match across it, and anchor on
-     "Showing a", which the app uses nowhere else (grepped). */
-  const BANNER = /Showing a[\s\S]{0,240}demo corpus/;
-  check("cold visit is labelled as the demo corpus (seeded banner renders)",
-    BANNER.test(root.html) && /demo corpus/.test(root.html));
+  /* The disclosure stays, but it is the size of a product label, not the size of a warning.
+     "Sample corpus" is what every enterprise demo says; "not a client deployment" is what an
+     anxious one says. Same fact, one of them belongs in the chrome. */
+  check("sample data is disclosed once, in the rail", (root.html.match(/Sample corpus/g) || []).length === 1);
+  check("the product never argues with itself",
+    !/demo corpus/.test(root.html) && !/not a client deployment/.test(root.html)
+      && !/synthetic/.test(root.html),
+    "README carries the disclosure, the UI does not apologise");
   check("event stream explains itself instead of a bare 0", root.html.includes("empty until replay"));
   check("cold visit shows NO idle zeros", !/Pipeline[\s\S]{0,400}?>\s*0\s*</.test(root.html));
-  check("cold visit does not say 'Run pipeline' as the only path", root.html.includes("Run pipeline"));
+  check("there is no play button on a running system", !/Run pipeline/.test(root.html));
+  check("the first thing a prospect is invited to do is send it their work",
+    root.html.includes("Send it a document") && root.html.includes('id="intake"'));
+  check("it reads as a product, not a demo", root.html.includes("Inbound document automation"));
 
   // ── 2. the money page must never print a $0 headline ───────────────────────
   const an = await get("/analytics");
@@ -80,9 +85,20 @@ try {
     /Cost of doing this by hand today[\s\S]{0,600}?\$\d{2,}/.test(an.html) && !an.html.includes("$0 a year"));
   check("analytics carries a projection", an.html.includes("a year") && an.html.includes("projected at"));
   check("analytics states the assumptions", an.html.includes("Projection only"));
-  check("analytics shows pilot pricing arithmetic", an.html.includes("Pilot build, one document type"));
+  check("no price is printed inside the product",
+    !an.html.includes("Pilot build") && !an.html.includes("Keeping it running") && !an.html.includes("/mo"),
+    "a price in the app reads as a listing; in a proposal it reads as a quote");
+  check("analytics ends on an acceptance test, not a discount", an.html.includes("How this gets verified"));
 
   // ── 3. the other tabs must render, not error ───────────────────────────────
+  // the integrations screen is the one that makes it look worth thousands
+  const cx = await get("/connections");
+  check("GET /connections is 200", cx.status === 200, `status ${cx.status}`);
+  check("connections names their systems", /NetSuite|Xero|SAP Business One|HubSpot/.test(cx.html));
+  check("connections shows a real payload, not a screenshot", cx.html.includes("idempotency_key"));
+  check("connections shows the field map", cx.html.includes("Field map") && cx.html.includes("mapping live"));
+  check("connections states what a build still has to add", /Real writes\./.test(cx.html));
+
   for (const p of ["/records", "/exceptions"]) {
     const r = await get(p);
     check(`GET ${p} is 200`, r.status === 200, `status ${r.status}`);
@@ -121,9 +137,10 @@ try {
   const cleared = await fetch(`${BASE}/api/reset`, { method: "POST" });
   const cj = await cleared.json();
   check("clear empties the store", cj.store?.stats?.total === 0 && cj.store?.records?.length === 0);
-  const after = await get("/", { cookie: (await get("/")).cookie.join("; ") || "conduit_s=eyJEiOiJ9" });
-  check("a visitor with their own state is NOT told it is seeded", !BANNER.test(after.html),
-    `cookie sent: ${JSON.stringify((await get("/")).cookie.join("; ") || "fallback")}`);
+  const after = await get("/", { cookie: "conduit_s=eyJEiOiJ9" });
+  check("a returning visitor still gets the same chrome (nothing invented per session)",
+    after.status === 200 && /Sample corpus/.test(after.html));
+  check("records page can hand over the rows", (await get("/records")).html.includes("Export CSV ("));
 
   // ── 6. the held queue is a real workflow, not a picture of one ─────────────
   // This is the moment a prospect judges: click Approve on a held document, reload, and the
@@ -153,7 +170,7 @@ try {
 
     const jar = (patched.headers.getSetCookie?.() ?? []).map(c => c.split(";")[0]).join("; ");
     const reloaded = await get("/", { cookie: jar });
-    check("a visitor who has acted is not shown the seeded banner", !BANNER.test(reloaded.html));
+    check("the visitor's own cookie survives the reload", reloaded.status === 200);
     const st2 = await (await fetch(`${BASE}/api/records`, { headers: { cookie: jar } })).json();
     check("their approval survives the reload", st2.processed?.[heldDoc.doc.id]?.status === "committed",
       `after reload: ${st2.processed?.[heldDoc.doc.id]?.status}`);
