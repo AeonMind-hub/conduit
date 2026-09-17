@@ -44,22 +44,25 @@ export default function Shell({
       {/* ── desktop rail ─────────────────────────────────────────── */}
       <aside className="hidden md:flex flex-col w-[212px] shrink-0 border-r border-line bg-surface">
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-line">
-          <div className="w-6 h-6 rounded-md bg-acc-soft border border-acc-line grid place-items-center shrink-0">
+          <div className="relative w-7 h-7 rounded-lg bg-acc-soft border border-acc-line grid place-items-center shrink-0">
             <div className="w-[7px] h-[7px] rounded-[2px] bg-acc" />
+            <div className="absolute inset-0 rounded-lg" style={{ boxShadow: "0 0 18px -4px rgba(62,207,142,0.55)" }} />
           </div>
           <div className="leading-tight min-w-0">
             <div className="text-sm2 font-semibold text-txt-hi truncate">Conduit</div>
-            <div className="text-micro text-txt-dim truncate">{CLIENT_SHORT} · {TAGLINE.toLowerCase()}</div>
+            <div className="text-micro text-txt-dim truncate">{TAGLINE}</div>
           </div>
         </div>
 
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav className="flex-1 p-2 space-y-0.5 mt-1">
+          <div className="label px-2.5 pt-1.5 pb-1.5">{CLIENT_SHORT}</div>
           {NAV.map(n => {
             const on = pathname === n.href;
             return (
               <Link key={n.href} href={n.href}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm2 transition-colors ${
+                className={`relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm2 transition-colors ${
                   on ? "bg-hover text-txt-hi" : "text-txt-mid hover:text-txt-hi hover:bg-raised"}`}>
+                {on && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[15px] rounded-full bg-acc" />}
                 <Icon d={n.icon} className={`w-[17px] h-[17px] shrink-0 ${on ? "text-acc" : "text-txt-dim"}`} />
                 <span className="truncate">{n.label}</span>
                 {n.badge && heldCount > 0 && (
@@ -74,7 +77,7 @@ export default function Shell({
 
         <div className="p-3 border-t border-line space-y-1.5">
           <Link href="/connections" className="flex items-center gap-2 text-micro group">
-            <span className="w-1.5 h-1.5 rounded-full bg-acc shrink-0" />
+            <span className="live-dot on" />
             <span className="text-txt-lo truncate group-hover:text-txt-mid">{INTAKE_ADDRESS}</span>
           </Link>
           <div className="text-micro text-txt-dim">

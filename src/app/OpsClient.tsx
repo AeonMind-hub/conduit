@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Pipeline, { TypeTag } from "@/components/Pipeline";
+import { TypeTag } from "@/components/Pipeline";
+import Flow, { type FlowStep, type FlowDest } from "@/components/Flow";
 import EventLog from "@/components/EventLog";
 import PageHead from "@/components/PageHead";
 import Stat from "@/components/Stat";
@@ -10,8 +12,9 @@ import { DOCS } from "@/lib/corpus";
 import { DOC_TYPES } from "@/lib/doctypes";
 import { LIVE_ID_BASE } from "@/lib/session";
 import { rates, pct } from "@/lib/types";
-import type { Stage, Store } from "@/lib/types";
-import { CLIENT_NAME, INTAKE_ADDRESS, engineLabel, LIVE_ENABLED, DAILY_VOLUME } from "@/lib/config";
+import type { Store } from "@/lib/types";
+import { CLIENT_NAME, INTAKE_ADDRESS, engineLabel, LIVE_ENABLED, DAILY_VOLUME,
+  SYSTEMS, systemName } from "@/lib/config";
 
 const STATUS: Record<string, string> = {
   queued:    "text-txt-dim border-line2",
@@ -83,15 +86,6 @@ export default function OpsClient({ initial }: { initial: Store }) {
 
   const { stats, processed, events } = store;
 
-  const counts = useMemo<Partial<Record<Stage, number>>>(() => ({
-    ingest: stats.total,
-    classify: stats.total,
-    extract: stats.total - stats.discarded,
-    validate: stats.total - stats.discarded,
-    route: stats.committed + stats.exceptions,
-    commit: stats.committed,
-  }), [stats]);
-
   const rows = useMemo(() => DOCS.filter(d => {
     if (filter === "all") return true;
     if (filter === "exception") return processed[d.id]?.status === "exception";
@@ -108,6 +102,27 @@ export default function OpsClient({ initial }: { initial: Store }) {
 
   // ONE denominator source for the whole app. Manual approvals never inflate it.
   const r = rates(stats);
+
+  const router = useRouter();
+  const typeCount = Object.keys(stats.byType).filter(k => k !== "unclassified").length;
+  const readable = stats.total - stats.discarded;
+
+  /* Every figure on the canvas is a count from this run — attrition at each gate, holds at the
+     gate that made them, records per destination. No decorative numbers. */
+  const flowSteps: FlowStep[] = [
+    { id: "ingest",   label: "Ingest",   value: stats.total,    hint: `${DOCS.length} in today's batch` },
+    { id: "classify", label: "Classify", value: stats.total,    hint: `${typeCount} doc types matched` },
+    { id: "extract",  label: "Extract",  value: readable,       hint: `${stats.fieldsAuto + stats.fieldsCorrected} fields read` },
+    { id: "validate", label: "Validate", value: readable,       hint: `${stats.exceptions} below the gate` },
+    { id: "route",    label: "Route",    value: stats.committed + stats.exceptions, hint: `${Object.keys(SYSTEMS).length} systems mapped` },
+    { id: "commit",   label: "Write",    value: stats.committed, hint: "rows in their systems" },
+  ];
+  const destinations: FlowDest[] = Object.keys(SYSTEMS).map(code => ({
+    code, name: systemName(code),
+    count: store.records.filter(x => x.destination === code).length,
+  }));
+  const activeLabel = activeId === null ? null
+    : (processed[activeId]?.doc?.subject ?? DOCS.find(d => d.id === activeId)?.subject ?? null);
 
   return (
     <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto">
@@ -138,10 +153,21 @@ export default function OpsClient({ initial }: { initial: Store }) {
       />
 
       <div className="space-y-4">
+        <Flow
+          total={stats.total}
+          steps={flowSteps}
+          held={stats.exceptions}
+          running={running}
+          active={activeLabel}
+          destinations={destinations}
+          onOpenHeld={() => router.push("/exceptions")}
+        />
+
         {/* ── paste one of THEIR documents ─────────────────────────────── */}
-        <div id="intake" className="card px-4 py-3.5 scroll-mt-4">
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="label">Send it a document</span>
+        <div id="intake" className="card px-4 sm:px-5 py-4 scroll-mt-4">
+          <div className="flex items-baseline gap-2.5 mb-3 flex-wrap">
+            <span className="text-lg2 font-semibold text-txt-hi tracking-[-0.015em]">Send it a document</span>
+            <span className="chip !py-0.5">{INTAKE_ADDRESS} in production</span>
             <span className="text-micro text-txt-dim">
               {LIVE_ENABLED
                 ? "one model call per document · held the moment it is not sure"
@@ -156,7 +182,7 @@ export default function OpsClient({ initial }: { initial: Store }) {
               className="px-2.5 py-2 rounded-lg bg-raised border border-line text-sm2 text-txt-hi
                          placeholder:text-txt-dim focus:outline-none focus:border-line2" />
           </div>
-          <textarea value={text} onChange={e => setText(e.target.value)} rows={4}
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={5}
             placeholder={"Paste the body of a purchase order, invoice or enquiry exactly as it arrives — messy is fine.\nPO Number: 88213\nQuantity: 480 units\nUnit price: $12.40"}
             className="w-full px-2.5 py-2 rounded-lg bg-raised border border-line text-sm2 text-txt-hi
                        placeholder:text-txt-dim focus:outline-none focus:border-line2 font-mono" />
@@ -195,7 +221,15 @@ export default function OpsClient({ initial }: { initial: Store }) {
           )}
         </div>
 
-        <Pipeline counts={counts} running={running} />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat label="Processed" value={stats.total} sub={`of ${DOCS.length} queued`} />
+          <Stat label="Committed" value={stats.committed} tone="acc"
+                sub={stats.total
+                  ? `${pct(r.onReceived)} of everything received · ${pct(r.onActionable)} of ${r.actionable} actionable`
+                  : "—"} />
+          <Stat label="Held" value={stats.exceptions} tone="hold" sub="waiting on a human" />
+          <Stat label="Discarded" value={stats.discarded} tone="dim" sub="no transactional content" />
+        </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat label="Processed" value={stats.total} sub={`of ${DOCS.length} queued`} />
