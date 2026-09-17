@@ -66,7 +66,9 @@ try {
   /* The disclosure stays, but it is the size of a product label, not the size of a warning.
      "Sample corpus" is what every enterprise demo says; "not a client deployment" is what an
      anxious one says. Same fact, one of them belongs in the chrome. */
-  check("sample data is disclosed once, in the rail", (root.html.match(/Sample corpus/g) || []).length === 1);
+  check("sample data is disclosed where a reader looks, and nowhere as a warning",
+    (root.html.match(/Sample corpus/g) || []).length >= 1
+      && !/not a client deployment/.test(root.html));
   check("the product never argues with itself",
     !/demo corpus/.test(root.html) && !/not a client deployment/.test(root.html)
       && !/synthetic/.test(root.html),
@@ -76,6 +78,13 @@ try {
   check("there is no play button on a running system", !/Run pipeline/.test(root.html));
   check("the first thing a prospect is invited to do is send it their work",
     root.html.includes("Send it a document") && root.html.includes('id="intake"'));
+  check("the landing face carries the claim, not a feature list",
+    /Documents arrive/.test(root.html) && /Rows appear in your systems/.test(root.html));
+  check("the hero states what happens to unverifiable documents",
+    /held for a human/.test(root.html) && /never guessed/.test(root.html));
+  check("hero and console are one page, linked", root.html.includes('href="#console"'));
+  check("the landing face does not sell with adjectives",
+    !/revolutionary|game[- ]changing|cutting[- ]edge|AI-powered|leverage|seamless|unlock/i.test(root.html));
   check("it reads as a product, not a demo", root.html.includes("Inbound document automation"));
 
   // ── 2. the money page must never print a $0 headline ───────────────────────

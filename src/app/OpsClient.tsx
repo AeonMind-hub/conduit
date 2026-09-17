@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TypeTag } from "@/components/Pipeline";
 import Flow, { type FlowStep, type FlowDest } from "@/components/Flow";
+import Hero from "@/components/Hero";
 import EventLog from "@/components/EventLog";
 import PageHead from "@/components/PageHead";
 import Stat from "@/components/Stat";
@@ -13,8 +14,11 @@ import { DOC_TYPES } from "@/lib/doctypes";
 import { LIVE_ID_BASE } from "@/lib/session";
 import { rates, pct } from "@/lib/types";
 import type { Store } from "@/lib/types";
-import { CLIENT_NAME, INTAKE_ADDRESS, engineLabel, LIVE_ENABLED, DAILY_VOLUME,
+import { CLIENT_NAME, INTAKE_ADDRESS, engineLabel, LIVE_ENABLED, DAILY_VOLUME, DEMO_URL,
   SYSTEMS, systemName } from "@/lib/config";
+
+const DEMO_REPO = DEMO_URL.includes("vercel.app")
+  ? "https://github.com/AeonMind-hub/conduit" : DEMO_URL;
 
 const STATUS: Record<string, string> = {
   queued:    "text-txt-dim border-line2",
@@ -125,27 +129,36 @@ export default function OpsClient({ initial }: { initial: Store }) {
     : (processed[activeId]?.doc?.subject ?? DOCS.find(d => d.id === activeId)?.subject ?? null);
 
   return (
-    <div className="px-4 sm:px-6 py-5 max-w-[1400px] mx-auto">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pb-10">
+      <Hero
+        client={CLIENT_NAME}
+        steps={flowSteps}
+        destinations={destinations}
+        held={stats.exceptions}
+        fieldsRead={stats.fieldsAuto + stats.fieldsCorrected}
+        intake={INTAKE_ADDRESS}
+        rates={{
+          onReceived: pct(r.onReceived), onActionable: pct(r.onActionable),
+          actionable: r.actionable, auto: r.auto, received: r.received,
+        }}
+      />
+
+      <section id="console" className="mt-9 pt-8 border-t border-line scroll-mt-4">
       <PageHead
+        eyebrow={<><span className="live-dot" /> console</>}
         title="Inbox"
         meta={`${CLIENT_NAME} · ${DOCS.length} documents today · intake ${INTAKE_ADDRESS} · ${DAILY_VOLUME}/day expected · engine ${engineLabel()}`}
         actions={
           <>
             {stats.total > 0 && (
-              <button onClick={reset} disabled={running}
-                className="px-3 py-1.5 rounded-lg border border-line2 text-sm2 text-txt-mid
-                           hover:text-txt-hi hover:border-txt-dim disabled:opacity-40 transition-colors">
+              <button onClick={reset} disabled={running} className="btn btn-ghost !py-1.5">
                 Clear
               </button>
             )}
-            <button onClick={replay} disabled={running}
-              className="px-3 py-1.5 rounded-lg border border-line2 text-sm2 text-txt-mid
-                         hover:text-txt-hi hover:border-txt-dim disabled:opacity-40 transition-colors">
+            <button onClick={replay} disabled={running} className="btn btn-ghost !py-1.5">
               {running ? "Processing…" : "Replay this run"}
             </button>
-            <a href="#intake"
-              className="px-3 py-1.5 rounded-lg border border-acc-line bg-acc-soft text-sm2 text-acc
-                         font-medium hover:opacity-90 transition-opacity">
+            <a href="#intake" className="btn btn-primary !py-1.5">
               Send it a document
             </a>
           </>
@@ -188,9 +201,8 @@ export default function OpsClient({ initial }: { initial: Store }) {
                        placeholder:text-txt-dim focus:outline-none focus:border-line2 font-mono" />
           <div className="flex items-center gap-3 mt-2">
             <button onClick={runOne} disabled={pasting || text.trim().length < 12}
-              className="px-3.5 py-1.5 rounded-lg border border-acc-line bg-acc-soft text-acc text-sm2
-                         font-medium hover:opacity-90 disabled:opacity-40 transition-opacity">
-              {pasting ? "Running…" : "Run this one"}
+              className="btn btn-primary">
+              {pasting ? "Reading it…" : "Run this one"}
             </button>
             {pasteMsg && <span className="text-micro text-txt-lo leading-snug">{pasteMsg}</span>}
             <span className="ml-auto text-micro font-mono text-txt-dim">
@@ -222,23 +234,29 @@ export default function OpsClient({ initial }: { initial: Store }) {
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Processed" value={stats.total} sub={`of ${DOCS.length} queued`} />
+          <Stat label="Processed" value={stats.total} unit={`of ${DOCS.length}`}
+                sub={`received today · ${stats.liveDocs} from this session`} />
           <Stat label="Committed" value={stats.committed} tone="acc"
                 sub={stats.total
                   ? `${pct(r.onReceived)} of everything received · ${pct(r.onActionable)} of ${r.actionable} actionable`
                   : "—"} />
-          <Stat label="Held" value={stats.exceptions} tone="hold" sub="waiting on a human" />
-          <Stat label="Discarded" value={stats.discarded} tone="dim" sub="no transactional content" />
+          <Stat label="Held" value={stats.exceptions} tone="hold" unit="in queue"
+                sub="waiting on a human · nothing written" />
+          <Stat label="Discarded" value={stats.discarded} tone="dim" unit="noise"
+                sub="no transactional content · nothing written" />
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Processed" value={stats.total} sub={`of ${DOCS.length} queued`} />
+          <Stat label="Processed" value={stats.total} unit={`of ${DOCS.length}`}
+                sub={`received today · ${stats.liveDocs} from this session`} />
           <Stat label="Committed" value={stats.committed} tone="acc"
                 sub={stats.total
                   ? `${pct(r.onReceived)} of everything received · ${pct(r.onActionable)} of ${r.actionable} actionable`
                   : "—"} />
-          <Stat label="Held" value={stats.exceptions} tone="hold" sub="waiting on a human" />
-          <Stat label="Discarded" value={stats.discarded} tone="dim" sub="no transactional content" />
+          <Stat label="Held" value={stats.exceptions} tone="hold" unit="in queue"
+                sub="waiting on a human · nothing written" />
+          <Stat label="Discarded" value={stats.discarded} tone="dim" unit="noise"
+                sub="no transactional content · nothing written" />
         </div>
 
         {stats.exceptions > 0 && (
@@ -369,6 +387,23 @@ export default function OpsClient({ initial }: { initial: Store }) {
           )}
         </div>
       </div>
+
+      <div className="card-hero mt-8 px-5 sm:px-7 py-6 flex flex-col sm:flex-row sm:items-center gap-5">
+        <div className="min-w-0">
+          <h2 className="text-lg2 font-semibold text-txt-hi">The only number worth trusting is yours</h2>
+          <p className="text-xs2 text-txt-lo mt-1.5 leading-relaxed max-w-[62ch]">
+            Send 50 documents from your real inbox. They go through the same gates you just watched —
+            the same 85% field gate, the same hold queue — and come back as rows, with the accuracy
+            figure for your mix and every held item explained. Until that number is good, nothing is
+            written anywhere.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+          <a href="#intake" className="btn btn-primary">Start with one document</a>
+          <a href={DEMO_REPO} target="_blank" rel="noreferrer" className="btn btn-ghost">How it works</a>
+        </div>
+      </div>
+      </section>
     </div>
   );
 }

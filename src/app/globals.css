@@ -2,82 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  --mint: 62 207 142;
+  --cool: 91 140 255;
+  --amber: 232 178 90;
+}
 
 html, body { @apply bg-bg; }
+html { scroll-behavior: smooth; }
 
 body {
   @apply text-txt-mid font-sans min-h-screen;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* Depth, not decoration: one warm glow over the working area and a cold one over the
-     destination side, so the eye reads left-to-right as "work flows into systems". */
   background-image:
-    radial-gradient(1000px 440px at 8% -10%, rgba(62, 207, 142, 0.085), transparent 62%),
-    radial-gradient(820px 380px at 98% -8%, rgba(91, 140, 255, 0.055), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 30%);
+    radial-gradient(1200px 520px at 10% -14%, rgba(var(--mint) / 0.10), transparent 60%),
+    radial-gradient(900px 420px at 92% -10%, rgba(var(--cool) / 0.07), transparent 60%);
   background-repeat: no-repeat;
 }
 
-h1, h2, h3 { @apply text-txt-hi font-semibold; letter-spacing: -0.02em; }
+/* A film of noise is the difference between "black" and "designed black". Kept at 2.5% so it is
+   felt, not seen, and never animates. */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 
-::selection { background: rgba(62, 207, 142, 0.26); color: #fff; }
+h1, h2, h3 { @apply text-txt-hi font-semibold; letter-spacing: -0.025em; }
+::selection { background: rgba(var(--mint) / 0.28); color: #fff; }
 
-::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { @apply bg-line2 rounded-full; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb { @apply bg-line2 rounded-full; border: 3px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background: #3b3b45 content-box; }
 
 .tnum { font-variant-numeric: tabular-nums; }
+.label { @apply text-micro uppercase text-txt-dim font-medium; letter-spacing: 0.085em; }
+.eyebrow { @apply text-micro uppercase font-medium; letter-spacing: 0.14em; }
 
-.label {
-  @apply text-micro uppercase text-txt-dim font-medium;
-  letter-spacing: 0.075em;
+/* ── surfaces ──────────────────────────────────────────────────────
+   Gradient hairline via a masked pseudo-element: a real light-falloff edge instead of a flat
+   1px border, which is the single cheapest thing that makes an interface look engineered. */
+.gcard, .card, .card-hero, .node, .btn-ghost {
+  position: relative; border-radius: 14px;
+  background: linear-gradient(180deg, #101014, #0c0c10);
 }
-
-/* Surfaces: hairline + a single top sheen + a soft drop. Identical flat boxes were why nothing
-   on the page looked more important than anything else. */
-.card {
-  @apply bg-surface border border-line rounded-xl2;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 14px 40px -24px rgba(0, 0, 0, 0.85);
-  position: relative;
+.gcard::before, .card::before, .card-hero::before, .node::before, .btn-ghost::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 38%, rgba(255,255,255,0.055));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
+.card { box-shadow: 0 16px 44px -28px rgba(0, 0, 0, 0.9); }
 .card-hero {
-  @apply bg-surface border border-line2 rounded-xl2 overflow-hidden;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 26px 70px -30px rgba(0, 0, 0, 0.95);
+  border-radius: 18px; overflow: hidden;
+  box-shadow: 0 30px 90px -40px rgba(0, 0, 0, 0.95);
 }
-.card-hero::before {
-  content: "";
-  position: absolute; inset: 0 0 auto 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(62, 207, 142, 0.45), transparent);
+.card-hero::after {
+  content: ""; position: absolute; left: 8%; right: 8%; top: 0; height: 1px; z-index: 1;
+  background: linear-gradient(90deg, transparent, rgba(var(--mint) / 0.55), transparent);
 }
 
-.chip {
-  @apply inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-line bg-raised
-         text-micro text-txt-lo whitespace-nowrap;
+/* ── type ────────────────────────────────────────────────────────── */
+.display {
+  font-size: clamp(34px, 6.4vw, 62px); line-height: 1.02; letter-spacing: -0.038em;
+  font-weight: 600; color: #f6f6f9;
 }
+.lede { font-size: clamp(15px, 2.1vw, 19px); line-height: 1.55; letter-spacing: -0.01em; }
+.grad-text {
+  background: linear-gradient(92deg, #f7f7fa 12%, rgba(var(--mint) / 0.95) 62%, #b9f3d6 88%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ── controls ────────────────────────────────────────────────────── */
+.btn {
+  @apply inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm2 font-medium
+         transition-all duration-150 select-none;
+}
+.btn-primary {
+  color: #05100b; background: linear-gradient(180deg, #58e0a4, #34c484);
+  box-shadow: 0 0 0 1px rgba(var(--mint) / 0.5), 0 10px 30px -12px rgba(var(--mint) / 0.5),
+              0 1px 0 rgba(255, 255, 255, 0.35) inset;
+}
+.btn-primary:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); filter: brightness(0.97); }
+.btn-ghost { @apply text-txt-mid; padding: 8px 14px; }
+.btn-ghost:hover { @apply text-txt-hi; background: linear-gradient(180deg, #16161b, #101014); }
+.btn:disabled { @apply opacity-40 pointer-events-none; }
+
+.chip { @apply inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-line bg-raised text-micro text-txt-lo whitespace-nowrap; }
 .chip-acc { @apply border-acc-line bg-acc-soft text-acc; }
 .chip-hold { @apply border-hold-line bg-hold-soft text-hold; }
-
-.kbd {
-  @apply inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded border border-line2
-         bg-surface text-[10px] font-mono text-txt-mid;
-}
+.kbd { @apply inline-grid place-items-center min-w-[18px] h-[18px] px-1 rounded border border-line2 bg-surface text-[10px] font-mono text-txt-mid; }
 
 /* ── the flow canvas ─────────────────────────────────────────────── */
 .node {
-  @apply relative w-[104px] sm:w-[118px] shrink-0 rounded-lg border border-line bg-raised px-3 py-2.5;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  @apply relative w-[104px] sm:w-[120px] shrink-0 rounded-xl px-3 py-2.5;
+  border-radius: 13px;
 }
-.node-live { @apply border-acc-line; box-shadow: 0 0 0 1px rgba(62, 207, 142, 0.16), 0 12px 30px -18px rgba(62, 207, 142, 0.35); }
-.node-hold { @apply border-hold-line; box-shadow: 0 0 0 1px rgba(232, 178, 90, 0.14), 0 12px 30px -18px rgba(232, 178, 90, 0.3); }
+.node-live { box-shadow: 0 0 0 1px rgba(var(--mint) / 0.22), 0 14px 36px -18px rgba(var(--mint) / 0.34); }
+.node-live::before { background: linear-gradient(180deg, rgba(var(--mint) / 0.55), rgba(255,255,255,0.02) 60%); }
+.node-write { background: linear-gradient(180deg, rgba(var(--mint) / 0.10), rgba(12,12,16,0.9)); }
+.node-hold { box-shadow: 0 0 0 1px rgba(var(--amber) / 0.22), 0 14px 36px -18px rgba(var(--amber) / 0.26); }
 
 .rail { @apply relative h-px bg-line2 w-7 sm:w-10 shrink-0 self-center; }
 .token {
-  position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px;
-  border-radius: 999px; background: #3ecf8e;
-  box-shadow: 0 0 10px 2px rgba(62, 207, 142, 0.5);
+  position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 999px;
+  background: rgb(var(--mint)); box-shadow: 0 0 12px 3px rgba(var(--mint) / 0.55);
   animation: travel 1.5s linear infinite;
 }
 @keyframes travel {
@@ -86,43 +120,36 @@ h1, h2, h3 { @apply text-txt-hi font-semibold; letter-spacing: -0.02em; }
   82%  { opacity: 1; }
   100% { left: 100%; opacity: 0; }
 }
-
 .meter { @apply h-[3px] w-full rounded-full bg-line overflow-hidden; }
-.meter > i { @apply block h-full rounded-full bg-acc/75; transition: width 420ms cubic-bezier(.2,.7,.3,1); }
+.meter > i { @apply block h-full rounded-full; background: linear-gradient(90deg, rgba(var(--mint) / 0.5), rgb(var(--mint))); transition: width 460ms cubic-bezier(.2,.7,.3,1); }
 
-.live-dot {
-  @apply inline-block w-1.5 h-1.5 rounded-full bg-line2 shrink-0;
-}
+.live-dot { @apply inline-block w-1.5 h-1.5 rounded-full bg-line2 shrink-0; }
 .live-dot.on { @apply bg-acc; animation: pulse 1.8s ease-in-out infinite; }
-@keyframes pulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50%      { opacity: 1; transform: scale(1.35); }
-}
+@keyframes pulse { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 1; transform: scale(1.4); } }
 
 .sheen { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .sheen::after {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 34%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
-  animation: sheen 2.6s ease-in-out infinite;
+  content: ""; position: absolute; top: 0; bottom: 0; width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.055), transparent);
+  animation: sheen 2.8s ease-in-out infinite;
 }
-@keyframes sheen { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+@keyframes sheen { 0% { transform: translateX(-130%); } 100% { transform: translateX(330%); } }
 
 .rowin { animation: flash 900ms ease-out; }
-@keyframes flash {
-  0%   { background-color: rgba(62, 207, 142, 0.16); }
-  100% { background-color: transparent; }
-}
-.rise { animation: rise 260ms cubic-bezier(.2, .7, .3, 1) both; }
+@keyframes flash { 0% { background-color: rgba(var(--mint) / 0.17); } 100% { background-color: transparent; } }
+.rise { animation: rise 320ms cubic-bezier(.2,.7,.3,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.hairline-b { border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.09), rgba(255,255,255,0.02)) 1; }
 
 input, textarea { @apply caret-acc; }
 textarea:focus-visible, input:focus-visible {
   outline: none; @apply border-acc-line bg-raised;
-  box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.10);
+  box-shadow: 0 0 0 3px rgba(var(--mint) / 0.10);
 }
-button:focus-visible, a:focus-visible {
-  outline: none; box-shadow: 0 0 0 2px rgba(62, 207, 142, 0.45); border-radius: 8px;
-}
+button:focus-visible, a:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(var(--mint) / 0.5); border-radius: 8px; }
+a { @apply no-underline; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
 }

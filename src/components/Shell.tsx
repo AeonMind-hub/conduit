@@ -42,8 +42,9 @@ export default function Shell({
   return (
     <div className="min-h-screen flex">
       {/* ── desktop rail ─────────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col w-[212px] shrink-0 border-r border-line bg-surface">
+      <aside className="hidden md:flex flex-col w-[216px] shrink-0 border-r border-line bg-surface/80 backdrop-blur-xl">
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-line">
+          <span className="sr-only">{CLIENT_SHORT} workspace</span>
           <div className="relative w-7 h-7 rounded-lg bg-acc-soft border border-acc-line grid place-items-center shrink-0">
             <div className="w-[7px] h-[7px] rounded-[2px] bg-acc" />
             <div className="absolute inset-0 rounded-lg" style={{ boxShadow: "0 0 18px -4px rgba(62,207,142,0.55)" }} />
@@ -94,7 +95,7 @@ export default function Shell({
           <div className="w-6 h-6 rounded-md bg-acc-soft border border-acc-line grid place-items-center">
             <div className="w-[7px] h-[7px] rounded-[2px] bg-acc" />
           </div>
-          <span className="text-sm2 font-semibold text-txt-hi">Conduit</span>
+          <span className="text-sm2 font-semibold text-txt-hi tracking-[-0.02em]">Conduit</span>
           <span className="ml-auto text-micro text-txt-dim">{CLIENT_SHORT}</span>
         </header>
 
@@ -102,7 +103,7 @@ export default function Shell({
       </div>
 
       {/* ── mobile bottom tabs ───────────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 border-t border-line bg-surface/95 backdrop-blur-md grid grid-cols-5">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 h-16 border-t border-line bg-surface/90 backdrop-blur-xl grid grid-cols-5">
         {NAV.map(n => {
           const on = pathname === n.href;
           return (
