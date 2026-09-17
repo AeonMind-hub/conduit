@@ -118,7 +118,9 @@ export default function Flow({
           <span className="hidden sm:block text-micro font-mono text-txt-lo truncate max-w-[30ch] rise"
                 key={active}>{active}</span>
         )}
-        <span className="ml-auto text-micro font-mono text-txt-dim tnum shrink-0">
+        {/* The counts repeat what the section head already says; on a phone they only served to
+            wrap "last completed run" across two lines. */}
+        <span className="ml-auto hidden sm:inline text-micro font-mono text-txt-dim tnum shrink-0">
           {total} documents · {destinations.length} destinations
         </span>
       </header>

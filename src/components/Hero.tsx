@@ -110,14 +110,15 @@ export default function Hero({
           </div>
         </div>
 
-        <div className="min-w-0">
+        {/* Under lg the whole sheet moves out of the fold: §01 prints these same six rows and the
+            same four destinations, and a phone visitor who meets them twice reasonably assumes the
+            page has nothing else to say. The counts band below stays, because that is the proof. */}
+        <div className="min-w-0 only-lg">
           <Flow steps={steps} destinations={destinations} held={held} total={rates.received}
                 running={false} active={null} ambient
                 onOpenHeld={() => { location.hash = "#console"; }} />
 
-          {/* Under lg this block repeats what the sheet above already says, and on a phone
-              "again" reads as padding. */}
-          <div className="mt-3.5 only-lg">
+          <div className="mt-3.5">
             <div className="label pb-1.5" style={{ borderBottom: "1px solid var(--rule)" }}>
               What it does, step by step
             </div>
