@@ -186,7 +186,9 @@ try {
   check("README has a real demo URL (no placeholder left)",
     rm.includes("https://conduit-demo-version.vercel.app") && !rm.includes("add your Vercel URL"));
   check("README quotes both denominators", rm.includes("88%") && rm.includes("96%"));
-  check("README labels the corpus synthetic", /synthetic/i.test(rm));
+  check("README discloses the sample corpus and disclaims client results",
+    /sample corpus/i.test(rm) && /No customer data was used/i.test(rm),
+    "the UI carries one short label; the README carries the full disclosure");
   check("README is honest about what is missing", rm.includes("Not implemented"));
 } catch (e) {
   fails.push(`threw: ${e.message}`);
