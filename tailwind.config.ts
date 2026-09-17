@@ -18,6 +18,8 @@ export default {
         txt:     { hi: "#ededf0", mid: "#9c9ca4", lo: "#6b6b74", dim: "#48484f" },
         acc:     { DEFAULT: "#3ecf8e", soft: "rgba(62,207,142,0.10)", line: "rgba(62,207,142,0.28)" },
         hold:    { DEFAULT: "#e5a94f", soft: "rgba(229,169,79,0.10)",  line: "rgba(229,169,79,0.28)" },
+        ok:      "#5ec98f",
+        ink:     { 700: "#2a2a30", 950: "#08080a" },
         stop:    { DEFAULT: "#e5695f", soft: "rgba(229,105,95,0.10)",  line: "rgba(229,105,95,0.28)" },
       },
       fontFamily: {

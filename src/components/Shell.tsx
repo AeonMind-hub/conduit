@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CLIENT_SHORT, CORPUS_LABEL } from "@/lib/config";
 import { useEffect, useState } from "react";
 
 /* Icons kept as small inline paths — no icon library, no extra weight. */
@@ -46,7 +47,7 @@ export default function Shell({
           </div>
           <div className="leading-tight min-w-0">
             <div className="text-sm2 font-semibold text-txt-hi truncate">Conduit</div>
-            <div className="text-micro text-txt-dim truncate">Northwind Supply</div>
+            <div className="text-micro text-txt-dim truncate">{CLIENT_SHORT}</div>
           </div>
         </div>
 

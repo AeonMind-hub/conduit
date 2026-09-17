@@ -88,6 +88,10 @@ export interface ProcessedDoc {
   correctedFields: string[];
   /** Which validation rules fired. */
   flags: string[];
+  /** Which engine produced this result. "none" means it could not answer, so it was held. */
+  engine?: "live" | "fixture" | "none";
+  /** One-line note when the engine itself failed or the model explained a low score. */
+  note?: string;
 }
 
 export interface Action {
@@ -111,6 +115,8 @@ export interface CommittedRecord {
   correctedFields: string[];
   /** Everything the system did on the operator's behalf. */
   actions: Action[];
+  /** "live" = model call, "fixture" = corpus row. The audit trail is a lie without this. */
+  engine?: "live" | "fixture" | "none";
 }
 
 export interface Event {
@@ -137,7 +143,13 @@ export interface Store {
     latencyTotal: number;
     /** Per-doc-type counts, for the mix chart. */
     byType: Record<string, number>;
+    /** Documents a visitor pasted in. */
+    liveDocs: number;
+    /** Of those, how many went through a real model call. */
+    liveCalls: number;
   };
+  /** True when this state was generated for a cold visitor rather than replayed. */
+  seeded: boolean;
 }
 
 export const THRESHOLD = 0.85;
@@ -149,7 +161,9 @@ export function emptyStore(): Store {
     stats: {
       total: 0, committed: 0, autoCommitted: 0, exceptions: 0, discarded: 0,
       fieldsAuto: 0, fieldsCorrected: 0, latencyTotal: 0, byType: {},
+      liveDocs: 0, liveCalls: 0,
     },
+    seeded: false,
   };
 }
 
@@ -168,3 +182,25 @@ export function failedRules(ex: Extraction, def: DocTypeDef): string[] {
   }
   return out;
 }
+
+/* ── Honest rates ──────────────────────────────────────────────────────
+   One denominator, computed here, used everywhere. The corpus is 75 documents
+   of which 6 are pure noise; 66 of 69 actionable commit untouched (96%), while
+   66 of 75 received is 88%. Quoting 96% without saying which denominator you
+   used is the kind of number that ends a sales conversation in one question. */
+export interface Rates {
+  /** committed without a human ÷ everything received */
+  onReceived: number;
+  /** committed without a human ÷ documents that had transactional content */
+  onActionable: number;
+  received: number;
+  actionable: number;
+  auto: number;
+}
+export function rates(stats: Store["stats"]): Rates {
+  const actionable = Math.max(0, stats.total - stats.discarded);
+  const onReceived = stats.total ? stats.autoCommitted / stats.total : 0;
+  const onActionable = actionable ? stats.autoCommitted / actionable : 0;
+  return { onReceived, onActionable, received: stats.total, actionable, auto: stats.autoCommitted };
+}
+export const pct = (n: number) => `${Math.round(n * 100)}%`;

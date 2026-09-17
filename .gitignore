@@ -7,3 +7,6 @@ out
 *.tsbuildinfo
 .DS_Store
 *.log
+.next/
+node_modules/
+.env.local

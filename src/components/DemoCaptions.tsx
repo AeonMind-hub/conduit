@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 
 const CAPTIONS = [
   "Northwind Supply. One ops inbox. 75 documents came in this morning.",
+  "Synthetic corpus, built to show the pattern — not a client deployment.",
   "Purchase orders, supplier invoices, delivery bookings, quote requests — and noise.",
   "Today one person opens every single one and decides where it goes.",
   "Watch the pipeline run.",
@@ -39,6 +40,7 @@ const CAPTIONS = [
   "Across a week that is real operator time back, on documents nobody enjoys typing.",
   "Same engine handles any document type. Adding one is a schema, not a rebuild.",
   "Two-week build. Works with the systems you already run.",
+  "Paste one of your own documents on the first screen and watch what it refuses to guess.",
 ];
 
 export default function DemoCaptions() {

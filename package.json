@@ -1,5 +1,5 @@
 {
-  "name": "intake-demo",
+  "name": "conduit",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,10 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "demo": "node scripts/demo.mjs"
+    "demo": "node scripts/demo.mjs",
+    "verify": "node scripts/verify.mjs",
+    "engine-check": "npx --yes tsx@4 scripts/engine-check.ts",
+    "check": "npm run typecheck && npm run build && npm run verify && npm run engine-check"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
