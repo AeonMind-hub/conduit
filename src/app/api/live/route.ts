@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import type { Doc } from "@/lib/types";
 import { runLive } from "@/lib/engine";
 import { LIVE_ENABLED, MODEL, MAX_LIVE_DOCS } from "@/lib/config";
-import { COOKIE_NAME, decodeWire, encodeWire, nextLiveId, pushLive, rebuild, wireBytes } from "@/lib/session";
+import { nextLiveId, pushLive, rebuild, wireBytes } from "@/lib/session";
+import { requestState, respondWithWire, fitWire } from "@/lib/wire-http";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -25,8 +26,7 @@ export async function POST(req: Request) {
       { status: 400 });
   }
 
-  const raw = req.headers.get("cookie")?.match(/conduit_s=([^;]+)/)?.[1];
-  const w0 = decodeWire(raw);
+  const { wire: w0 } = requestState(req);
   const doc: Doc = {
     id: nextLiveId(w0),
     from: (body?.from ?? "unknown sender").slice(0, 80),
@@ -61,15 +61,10 @@ export async function POST(req: Request) {
     });
   }
 
-  const store = rebuild(w);
-  const encoded = encodeWire(w);
-  const res = NextResponse.json({
-    ok: true, store, docId: doc.id,
-    kept: Math.min(MAX_LIVE_DOCS, (w.l ?? []).length),
-    cookieBytes: wireBytes(w), cookieLen: encoded.length,
-  });
-  res.cookies.set(COOKIE_NAME, encoded, {
-    path: "/", httpOnly: false, sameSite: "lax", maxAge: 60 * 60 * 24,
-  });
-  return res;
+  const fitted = fitWire(w);
+  return respondWithWire({
+    ok: true, store: rebuild(fitted), docId: doc.id,
+    kept: Math.min(MAX_LIVE_DOCS, (fitted.l ?? []).length),
+    cookieBytes: wireBytes(fitted),
+  }, fitted);
 }

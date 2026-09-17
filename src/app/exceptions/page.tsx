@@ -1,10 +1,10 @@
-import { cookies } from "next/headers";
 import ExceptionsClient from "./ExceptionsClient";
-import { COOKIE_NAME, rebuild, wireOrSeed } from "@/lib/session";
+import { visitorState } from "@/lib/wire-http";
 
 export const dynamic = "force-dynamic";
 
+/** One derivation of visitor state, in one module, shared with the API routes. */
 export default async function Page() {
-  const jar = await cookies();
-  return <ExceptionsClient initial={rebuild(wireOrSeed(jar.get(COOKIE_NAME)?.value))} />;
+  const { store } = await visitorState();
+  return <ExceptionsClient initial={store} />;
 }

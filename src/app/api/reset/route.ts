@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { COOKIE_NAME, EMPTY_WIRE, encodeWire, rebuild } from "@/lib/session";
+import { rebuild } from "@/lib/session";
+import { respondWithWire, emptyWire } from "@/lib/wire-http";
 
 export const dynamic = "force-dynamic";
 
 /** Blank slate — clears the pasted documents too, not just the corpus run. */
 export async function POST() {
-  const res = NextResponse.json({ ok: true, store: rebuild({ ...EMPTY_WIRE, l: [] }) });
-  res.cookies.set(COOKIE_NAME, encodeWire({ ...EMPTY_WIRE, l: [] }), {
-    path: "/", httpOnly: false, sameSite: "lax", maxAge: 60 * 60 * 24,
-  });
-  return res;
+  // An empty wire, not a missing cookie: a visitor who clears must be told nothing about
+  // "seeded demo data", because from here on the run is genuinely theirs.
+  const w = emptyWire();
+  return respondWithWire({ ok: true, store: rebuild(w) }, w);
 }

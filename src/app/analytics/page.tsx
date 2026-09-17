@@ -1,5 +1,4 @@
-import { cookies } from "next/headers";
-import { COOKIE_NAME, rebuild, wireOrSeed } from "@/lib/session";
+
 import { DOC_TYPES } from "@/lib/doctypes";
 import { rates, pct } from "@/lib/types";
 import { TypeTag } from "@/components/Pipeline";
@@ -7,6 +6,8 @@ import PageHead from "@/components/PageHead";
 import {
   CLIENT_NAME, DAILY_VOLUME, HOURLY, BUILD_FEE, MONTHLY_FEE, CORPUS_LABEL, engineLabel,
 } from "@/lib/config";
+
+import { visitorState } from "@/lib/wire-http";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,8 @@ export const dynamic = "force-dynamic";
    assumptions visible so an ops manager can check them without a calculator. */
 
 export default async function AnalyticsPage() {
-  const jar = await cookies();
-  const { stats } = rebuild(wireOrSeed(jar.get(COOKIE_NAME)?.value));
+  const { store } = await visitorState();
+  const { stats } = store;
   const r = rates(stats);
 
   // Weighted average manual minutes across the observed document mix.

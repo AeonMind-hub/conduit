@@ -54,7 +54,8 @@ export interface Wire {
   d: number[];
   a: number[];
   x: number[];
-  c: [number, string][];
+  /** [docId, fieldKey, valueTheHumanEntered] — values, so a fix survives a reload. */
+  c: [number, string, string][];
   l?: LiveDoc[];
 }
 
@@ -72,7 +73,11 @@ export function decodeWire(raw: string | undefined | null): Wire {
   if (!raw) return { ...EMPTY_WIRE, l: [] };
   try {
     const w = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Wire;
-    return { d: w.d ?? [], a: w.a ?? [], x: w.x ?? [], c: w.c ?? [], l: w.l ?? [] };
+    return {
+      d: w.d ?? [], a: w.a ?? [], x: w.x ?? [], l: w.l ?? [],
+      // tolerate a 2-tuple from an older visitor cookie rather than dropping their corrections
+      c: (w.c ?? []).map(r => [r[0], r[1], r[2] ?? ""] as [number, string, string]),
+    };
   } catch { return { ...EMPTY_WIRE, l: [] }; }
 }
 
@@ -111,14 +116,21 @@ function items(w: Wire): Item[] {
 }
 
 /** Deterministically rebuild the full store from the compact wire form. */
-export function rebuild(w: Wire): Store {
+/**
+ * Replay the wire into a Store.
+ *
+ * `seeded` has to be passed in by the caller. It means "this visitor had no cookie, so the
+ * corpus was handed to them", and the wire cannot say that about itself: wireOrSeed() injects
+ * the 75 documents, so any predicate derived from w.d is true for exactly the visitors we mean
+ * to flag. Getting this wrong silently kills the banner that tells a prospect the run they are
+ * looking at is the demo corpus.
+ */
+export function rebuild(w: Wire, opts: { seeded?: boolean } = {}): Store {
   const s = emptyStore();
   const approved = new Set(w.a);
   const discarded = new Set(w.x);
-  const corrections = new Map<number, string[]>();
-  for (const [id, key] of w.c) corrections.set(id, [...(corrections.get(id) ?? []), key]);
-
-  const hadCookie = (w.d.length + (w.l?.length ?? 0)) > 0;
+  const corrections = new Map<number, Record<string, string>>();
+  for (const [id, key, val] of w.c) corrections.set(id, { ...(corrections.get(id) ?? {}), [key]: val });
 
   for (const { doc, fx, latency, eng, err } of items(w)) {
     const docId = doc.id;
@@ -151,12 +163,26 @@ export function rebuild(w: Wire): Store {
       continue;
     }
 
-    const def = DOC_TYPES[fx.type];
-    const ex = fx.extraction;
+    // The human's values are applied before the gate runs, and a field a person confirmed is
+    // treated as certain — that is what clicking Approve means.
+    const fixMap = corrections.get(docId) ?? {};
+    const fixedKeys = Object.keys(fixMap);
+    let fxc: Fixture = fx;
+    if (fxc.extraction && fixedKeys.length) {
+      fxc = { ...fxc, extraction: {
+        ...fxc.extraction,
+        values: { ...fxc.extraction.values, ...fixMap },
+        confidence: { ...fxc.extraction.confidence,
+                      ...Object.fromEntries(fixedKeys.map(k => [k, 1 as number])) },
+      } };
+    }
+
+    const def = DOC_TYPES[fxc.type];
+    const ex = fxc.extraction as NonNullable<Fixture["extraction"]>;
     // Thresholds alone decide from here: an engine failure already continued above.
     const held = blocks(ex, def);
     const flags = failedRules(ex, def);
-    const fixed = corrections.get(docId) ?? [];
+    const fixed = fixedKeys;
 
     const commit = (auto: boolean) => {
       const cells: Record<string, string> = {};
@@ -184,7 +210,9 @@ export function rebuild(w: Wire): Store {
       }
     };
 
-    if (!held) { commit(true); continue; }
+    // A document the human repaired commits as human-touched, not as "auto": the audit trail
+    // must keep saying which fields a person had to confirm.
+    if (!held) { commit(fixed.length === 0); continue; }
     if (discarded.has(docId)) {
       s.processed[docId] = {
         doc, status: "discarded", stage: "classify", type: fx.type,
@@ -204,7 +232,7 @@ export function rebuild(w: Wire): Store {
     s.stats.exceptions += 1;
   }
 
-  s.seeded = !hadCookie && s.stats.total > 0;
+  s.seeded = !!opts.seeded && s.stats.total > 0;
   return s;
 }
 

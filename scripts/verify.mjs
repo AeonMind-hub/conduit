@@ -63,6 +63,13 @@ try {
   check("cold visit shows both denominators",
     root.html.includes("88%") && root.html.includes("96%"),
     `88%:${root.html.includes("88%")} 96%:${root.html.includes("96%")}`);
+  /* The banner renders as `Showing a <span>completed run</span> of the {DOCS.length}-document
+     demo corpus`, so the words are separated by markup. Match across it, and anchor on
+     "Showing a", which the app uses nowhere else (grepped). */
+  const BANNER = /Showing a[\s\S]{0,240}demo corpus/;
+  check("cold visit is labelled as the demo corpus (seeded banner renders)",
+    BANNER.test(root.html) && /demo corpus/.test(root.html));
+  check("event stream explains itself instead of a bare 0", root.html.includes("empty until replay"));
   check("cold visit shows NO idle zeros", !/Pipeline[\s\S]{0,400}?>\s*0\s*</.test(root.html));
   check("cold visit does not say 'Run pipeline' as the only path", root.html.includes("Run pipeline"));
 
@@ -114,6 +121,48 @@ try {
   const cleared = await fetch(`${BASE}/api/reset`, { method: "POST" });
   const cj = await cleared.json();
   check("clear empties the store", cj.store?.stats?.total === 0 && cj.store?.records?.length === 0);
+  const after = await get("/", { cookie: (await get("/")).cookie.join("; ") || "conduit_s=eyJEiOiJ9" });
+  check("a visitor with their own state is NOT told it is seeded", !BANNER.test(after.html),
+    `cookie sent: ${JSON.stringify((await get("/")).cookie.join("; ") || "fallback")}`);
+
+  // ── 6. the held queue is a real workflow, not a picture of one ─────────────
+  // This is the moment a prospect judges: click Approve on a held document, reload, and the
+  // decision must still be there WITH THE VALUE THEY TYPED. There was no PATCH handler on this
+  // route when the first version shipped, so the demo's best screen 405'd in production.
+  const cold = await fetch(`${BASE}/api/records`);
+  const store0 = await cold.json();
+  const heldDoc = Object.values(store0.processed).find(p => p.status === "exception" && p.type !== "unclassified");
+  check("a cold visit has something in the held queue", !!heldDoc, heldDoc ? `${held.type} ${heldDoc.flags}` : "nothing held");
+  if (heldDoc) {
+    const key = Object.keys(heldDoc.extraction?.values ?? {})[0];
+    const patched = await fetch(`${BASE}/api/records`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ docId: heldDoc.doc.id, action: "approve", correctedFields: [key],
+                             extraction: { values: { ...heldDoc.extraction.values, [key]: "VERIFY-SENTINEL-99" } } }),
+    });
+    const pj = await patched.json();
+    const after1 = pj.store?.processed?.[heldDoc.doc.id];
+    check("PATCH approve commits the held document", patched.status === 200 && after1?.status === "committed",
+      `http ${patched.status} → ${after1?.status}`);
+    check("the approval is written to the visitor cookie", (patched.headers.getSetCookie?.() ?? []).join("").includes("conduit_s="));
+    const rec = (pj.store?.records ?? []).find(r => r.sourceDocId === heldDoc.doc.id);
+    check("the human's corrected value is what got written", rec?.cells?.[key] === "VERIFY-SENTINEL-99",
+      `cells.${key}=${rec?.cells?.[key]}`);
+    check("and the audit trail still says a person fixed that field", (rec?.correctedFields ?? []).includes(key),
+      `correctedFields=${rec?.correctedFields}`);
+
+    const jar = (patched.headers.getSetCookie?.() ?? []).map(c => c.split(";")[0]).join("; ");
+    const reloaded = await get("/", { cookie: jar });
+    check("a visitor who has acted is not shown the seeded banner", !BANNER.test(reloaded.html));
+    const st2 = await (await fetch(`${BASE}/api/records`, { headers: { cookie: jar } })).json();
+    check("their approval survives the reload", st2.processed?.[heldDoc.doc.id]?.status === "committed",
+      `after reload: ${st2.processed?.[heldDoc.doc.id]?.status}`);
+    const rejected = await fetch(`${BASE}/api/records`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ docId: heldDoc.doc.id }),
+    });
+    check("a malformed approve is refused, not half-applied", rejected.status === 400);
+  }
 
   // ── 5. the README cannot drift from the code it describes ─────────────────
   const rm = readFileSync("README.md", "utf8");
