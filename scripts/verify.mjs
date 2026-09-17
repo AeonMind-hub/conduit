@@ -83,6 +83,9 @@ try {
   check("the hero states what happens to unverifiable documents",
     /held for a human/.test(root.html) && /never guessed/.test(root.html));
   check("hero and console are one page, linked", root.html.includes('href="#console"'));
+  check("nothing on the landing face pretends to be live traffic",
+    !/live-dot on/.test(root.html.split('id="console"')[0]),
+    "the pulsing dot belongs to the console, where a run can actually be running");
   check("the landing face does not sell with adjectives",
     !/revolutionary|game[- ]changing|cutting[- ]edge|AI-powered|leverage|seamless|unlock/i.test(root.html));
   check("it reads as a product, not a demo", root.html.includes("Inbound document automation"));

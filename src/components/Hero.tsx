@@ -50,7 +50,9 @@ export default function Hero({
   return (
     <header className="relative pt-10 sm:pt-16 pb-8 sm:pb-12">
       <div className="flex items-center gap-2.5 mb-6">
-        <span className="live-dot on" />
+        {/* A static dot. A pulsing one claims traffic this page does not have, and one invented
+            pulse is enough to make every real number on the screen look invented too. */}
+        <span className="live-dot" />
         <span className="eyebrow text-txt-dim">Conduit · inbound document automation</span>
         <span className="ml-auto chip font-mono">{intake}</span>
       </div>
