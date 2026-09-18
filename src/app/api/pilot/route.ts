@@ -30,6 +30,11 @@ export const maxDuration = 60;
 
 const enc = new TextEncoder();
 
+/** Sizes the way a person quotes them. A small file printed as "0 KB" reads as an empty file, which
+ *  is the one impression an intake screen cannot afford. */
+const fmtBytes = (b: number) =>
+  b < 1024 ? `${b} B` : b < 1_048_576 ? `${(b / 1024).toFixed(b < 10_240 ? 1 : 0)} KB` : `${(b / 1_048_576).toFixed(1)} MB`;
+
 type Emit = (ev: Record<string, unknown>) => void;
 
 interface Verdict {
@@ -130,7 +135,7 @@ export async function POST(req: Request) {
           // document ids continue the run's sequence, so a payload's idempotency key never collides with
           // one from a previous run the customer may still have in their system.
           const id = nextLiveId(w);
-          emit({ t: "stage", i, stage: "receive", ms: 0, detail: `${(p.bytes / 1024).toFixed(0)} KB · ${p.kind}` });
+          emit({ t: "stage", i, stage: "receive", ms: 0, detail: `${fmtBytes(p.bytes)} · ${p.kind}` });
 
           if (p.unreadable || !p.text) {
             emit({ t: "stage", i, stage: "text", ms: 0, detail: p.unreadable ?? "no text found", bad: true });
