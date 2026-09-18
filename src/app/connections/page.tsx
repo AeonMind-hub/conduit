@@ -4,6 +4,7 @@ import { DOC_TYPES } from "@/lib/doctypes";
 import { CLIENT_NAME, ENV_LABEL, INTAKE_ADDRESS, SYSTEMS, systemName } from "@/lib/config";
 import { visitorState } from "@/lib/wire-http";
 import type { CommittedRecord, Store } from "@/lib/types";
+import { payloadFor } from "@/lib/payload";
 
 export const dynamic = "force-dynamic";
 
@@ -24,24 +25,6 @@ const CONNECTOR: Record<string, string> = {
   CRM: "upsert deal by company + PO reference",
 };
 
-function payloadFor(r: CommittedRecord, store: Store) {
-  const src = Object.values(store.processed).find(p => p.doc.id === r.sourceDocId)?.doc;
-  return {
-    object: DOC_TYPES[r.type]?.label ?? r.type,
-    external_id: r.ref,
-    idempotency_key: `${r.ref}:${r.sourceDocId}`,
-    received_at: src?.receivedAt ?? null,
-    from: src?.from ?? null,
-    fields: r.cells,
-    confidence: r.confidence,
-    provenance: {
-      committed_by: r.auto ? "conduit" : "human_review",
-      fields_corrected_by_human: r.correctedFields,
-      engine: r.engine ?? "fixture",
-    },
-    downstream: r.actions.map(a => `${a.kind}:${a.target}`),
-  };
-}
 
 export default async function ConnectionsPage() {
   const { store } = await visitorState();

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TypeTag } from "@/components/Pipeline";
+import { PilotRoom } from "@/components/PilotRoom";
 import Flow, { type FlowStep, type FlowDest } from "@/components/Flow";
 import Hero from "@/components/Hero";
 import EventLog from "@/components/EventLog";
@@ -234,6 +235,8 @@ export default function OpsClient({ initial }: { initial: Store }) {
             </div>
           )}
         </div>
+
+        <PilotRoom />
 
         <div className="flex items-baseline gap-2.5 mb-2 mt-1">
           <span className="sect-no">03</span>

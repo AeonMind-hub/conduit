@@ -88,8 +88,9 @@ export interface ProcessedDoc {
   correctedFields: string[];
   /** Which validation rules fired. */
   flags: string[];
-  /** Which engine produced this result. "none" means it could not answer, so it was held. */
-  engine?: "live" | "fixture" | "none";
+  /** Which engine produced this result. "none" means it could not answer, so it was held.
+   *  "rules" is the deterministic extractor — no model call, nothing leaves the request. */
+  engine?: "live" | "fixture" | "rules" | "none";
   /** One-line note when the engine itself failed or the model explained a low score. */
   note?: string;
 }
@@ -115,8 +116,8 @@ export interface CommittedRecord {
   correctedFields: string[];
   /** Everything the system did on the operator's behalf. */
   actions: Action[];
-  /** "live" = model call, "fixture" = corpus row. The audit trail is a lie without this. */
-  engine?: "live" | "fixture" | "none";
+  /** Which engine produced the value. The audit trail is a lie without this. */
+  engine?: "live" | "fixture" | "rules" | "none";
 }
 
 export interface Event {

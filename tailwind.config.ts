@@ -35,7 +35,24 @@ export default {
         stop: { DEFAULT: "var(--red)", soft: "var(--red-soft)", line: "var(--red-rule)" },
         ok: "var(--green)",
         cool: { DEFAULT: "var(--blue)", soft: "var(--blue-soft)", line: "var(--blue-rule)" },
-        ink: { 700: "var(--ink-2)", 950: "var(--ink)" },
+        /* The record palette, named the way the components say it out loud. A utility that matches no
+           token is dropped without a word, so "text-mute" on a caption renders as body text — a typecheck
+           passes, a build passes, and the page quietly loses its entire hierarchy. These aliases are what
+           make the vocabulary in src/ real rather than remembered. */
+        paper: "var(--paper)",
+        paper2: "var(--panel)",
+        rule: "var(--rule)",
+        rule2: "var(--rule2)",
+        ink: { DEFAULT: "var(--ink)", 700: "var(--ink-2)", 950: "var(--ink)" },
+        ink2: "var(--ink-2)",
+        ink3: "var(--ink-3)",
+        body: "var(--ink-2)",
+        mute: "var(--ink-3)",
+        mute2: "var(--ink-4)",
+        amber: "var(--amber)",
+        green: "var(--green)",
+        red: "var(--red)",
+        blue: "var(--blue)",
       },
       fontFamily: {
         /* Set in layout.tsx with next/font/local — first-party woff2, no third-party CDN standing

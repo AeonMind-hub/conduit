@@ -36,21 +36,46 @@ are labelled with their denominators instead of hidden behind a hedge.
 No customer data was used, and nothing here claims a client outcome. What is on offer is the
 mechanism, shown at the volume and against the systems a prospect names.
 
+## Running your own documents
+
+The pilot room — section 02 of the home page, `POST /api/pilot` — takes a prospect's own files:
+PDFs with a text layer, text files, or pasted text. Each document visibly walks the same stages
+the sample run shows (`received → text → classify → fields → gates → route`, streamed as events),
+and the payoff is a field map with a confidence on every value and a sentence explaining anything
+under 90%, the exact body that would be sent to the destination system, and the same table as CSV.
+
+Nothing is stored, because there is nothing to store into: no database, no cookie written by the
+route, no copy kept after the response ends. A scan, an image, or a container this build cannot
+read comes back as **a hold naming the format**, never as a guess.
+
+It is gated on `PILOT_CODES` (one code per company) rather than left open, because an anonymous
+"upload your invoices" endpoint is a bill somebody else runs and a data request nobody answered.
+Without a code configured the endpoint refuses everything and the page says so.
+
 ## What is real vs. simulated
 
 | Part | Status in this repo |
 | --- | --- |
-| Classification + extraction | **Real model call** when `GEMINI_API_KEY` is set and `OFFLINE_DEMO` is unset. The prompt, JSON schema, per-field confidence and clamping live in `src/lib/engine.ts`. |
+| Classification + extraction, with a key | **Real model call** when `GEMINI_API_KEY` is set and `OFFLINE_DEMO` is unset. The prompt, JSON schema, per-field confidence and clamping live in `src/lib/engine.ts`. |
+| Classification + extraction, without a key | **Real code.** `src/lib/rules.ts` — labelled finders per document type over the same field definitions and the same gates. Deterministic, free, and it will not fill a field whose label is not in the document. |
+| File intake (the pilot room) | **Real.** `/api/pilot` reads a PDF's text layer with `unpdf`, plain text, or pasted text, and runs it through whichever engine the deployment has. |
+| Multi-line documents | **Not implemented.** One row per write, so a two-line order is *held* (`LOW_CONF_SKU`) rather than its first line being posted as though it were the whole order. Line-level rows are a pilot build, priced as one. |
+| OCR, Word, Excel | **Not implemented.** Those arrive as a hold naming the format, which is the honest answer and not an apology: inventing text from a scan is how an ERP ends up with a quantity nobody typed. |
 | Thresholds, holds, corrections, audit trail, routing actions | **Real code.** `src/lib/types.ts` (`blocks`, `failedRules`, `rates`), `src/lib/session.ts`. |
 | The 75 documents and their expected extractions | **Authored fixtures** in `src/lib/corpus.ts`, so the offline demo costs nothing and behaves identically for two people at once. |
 | Writes to an ERP / accounting / WMS / CRM | **Not implemented.** `src/lib/actions.ts` records what *would* be written, in the shape a real integration needs. A pilot adds the connectors against one client's system. |
-| Email inbox ingestion | **Not implemented.** Documents arrive by paste (`Run this one`) or, in a pilot, by a mailbox rule. |
+| Email inbox ingestion | **Not implemented.** Documents arrive as files, by paste (`Run this one`), or in a pilot by a mailbox rule. |
 
-If `OFFLINE_DEMO=1` (the default, and what the public deploy runs), there is no key on a
-public URL for strangers to spend. In that mode anything you paste is **held with
-`ENGINE_UNAVAILABLE` rather than committed** — the product's own safety rule applied to
-its own failure modes. Run it live to see extraction: set `GEMINI_API_KEY` and clear
-`OFFLINE_DEMO`.
+Two engines, one set of gates, and they are not interchangeable in an audit:
+
+- **The paste panel** (section 02) is the *model* path. With `OFFLINE_DEMO=1` on the public
+  deploy there is no key to call, so a pasted document is **held with `ENGINE_UNAVAILABLE`
+  rather than committed** — the product's own rule applied to its own failure mode. Set a billed
+  `GEMINI_API_KEY` and clear `OFFLINE_DEMO` to watch the model extract it instead.
+- **The pilot room** is the *rules* path and needs no key at all, which is why it can be handed
+  to a stranger: nothing leaves the request, nothing costs money, and every row still has to
+  clear `blocks()` in `src/lib/types.ts`. The screen names which engine produced each document,
+  because "the AI did it" is not an answer an auditor accepts.
 
 ## The numbers, stated with their denominators
 

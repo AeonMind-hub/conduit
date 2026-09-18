@@ -65,4 +65,19 @@ export const MODEL         = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 /** How many pasted documents a visitor can keep before the cookie gets too big. */
 export const MAX_LIVE_DOCS = num(process.env.NEXT_PUBLIC_MAX_LIVE_DOCS, 4);
 
+/* ── the pilot room: a client's own documents, run in front of them ─────────────
+ * OFF by default. Without a code in PILOT_CODES the endpoint refuses everything, because an
+ * unauthenticated public "upload your invoices" route is a bill you did not agree to and a data
+ * request you did not answer. One code per prospect is what makes it safe to send the link.
+ */
+const list = (v: string | undefined) => (v ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+export const PILOT_CODES  = list(process.env.PILOT_CODES);
+export const PILOT_OPEN   = PILOT_CODES.length > 0;
+export const MAX_PILOT_DOCS  = num(process.env.PILOT_MAX_DOCS, 12);
+export const MAX_PILOT_BYTES = num(process.env.PILOT_MAX_BYTES, 1_500_000);
+export const PILOT_CHARS_PER_DOC = num(process.env.PILOT_MAX_CHARS, 12_000);
+/** A pilot on a free-tier key means Google may train on the client's paperwork. That is the client's
+ *  call to make, never ours to make silently — so the site says which tier ran it. */
+export const PILOT_MODEL_BILLED = process.env.PILOT_MODEL_BILLED === "1";
+
 export const engineLabel = () => LIVE_ENABLED ? `live · ${MODEL}` : "fixture corpus · offline";

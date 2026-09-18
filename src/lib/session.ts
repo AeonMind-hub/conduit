@@ -45,8 +45,9 @@ export interface LiveDoc {
   cf: Record<string, number>;
   tc: number;
   ms: number;
-  /** live = model answered · fixture = corpus row · none = engine failed, so it is held. */
-  eng: "live" | "fixture" | "none";
+  /** live = model answered · rules = deterministic extractor · fixture = corpus row ·
+   *  none = no engine could answer, so the document is held rather than filled in. */
+  eng: "live" | "fixture" | "rules" | "none";
   err?: string;
 }
 
@@ -237,9 +238,12 @@ export function rebuild(w: Wire, opts: { seeded?: boolean } = {}): Store {
 }
 
 /** Append a pasted document's result, keeping the cookie under the 4KB domain limit. */
-export function pushLive(w: Wire, live: LiveDoc): Wire {
+export function pushLive(w: Wire, live: LiveDoc, max: number = MAX_LIVE_DOCS): Wire {
   const l = [...(w.l ?? []), live];
-  while (l.length > MAX_LIVE_DOCS) l.shift();
+  // The trim is a cookie constraint, not a product one: /api/live keeps four documents because a
+  // fifth would push the state header past what a browser sends back. A route that keeps nothing
+  // needs no such cap, so callers that hold state only pass their own batch size.
+  while (l.length > max) l.shift();
   return { ...w, l };
 }
 

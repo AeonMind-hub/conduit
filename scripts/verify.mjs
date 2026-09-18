@@ -12,7 +12,10 @@
 import { spawn } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 
-const PORT = 3711 + (process.pid % 40);
+const PORT = 4300 + (process.pid % 1600);
+/** The pilot room is shut unless a code exists, so the suite configures one for its own server and
+ *  asserts both halves: that a run works with it, and that nothing at all works without one. */
+const PILOT_CODE = "verify-northwind";
 const BASE = `http://127.0.0.1:${PORT}`;
 const fails = [];
 const ok = [];
@@ -26,10 +29,15 @@ if (!existsSync(".next/BUILD_ID")) {
   process.exit(1);
 }
 
-const server = spawn("npx", ["next", "start", "-p", String(PORT)], {
-  env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", OFFLINE_DEMO: "1" },
+/* One process, not `npx next`: a wrapper means the kill at the end of this file signals `npx` and
+ * leaves `next start` running, and every later run then verifies a build that no longer exists. The
+ * suite that cannot tell which server it is talking to is not a suite. */
+const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], {
+  env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", OFFLINE_DEMO: "1", PILOT_CODES: PILOT_CODE },
   stdio: ["ignore", "pipe", "pipe"],
+  detached: true,
 });
+const stopServer = () => { try { process.kill(-server.pid, "SIGKILL"); } catch { try { server.kill("SIGKILL"); } catch { /* gone */ } } };
 let out = "";
 server.stdout.on("data", d => { out += d; });
 server.stderr.on("data", d => { out += d; });
@@ -48,6 +56,10 @@ async function waitReady(timeoutMs = 60_000) {
    page that is perfectly correct. Strip the markers before matching. */
 const tidy = h => h.replace(/<!--[\s\S]*?-->/g, "");
 
+/** Thirteen small files: over the per-run document bound, nowhere near the platform's body limit,
+ *  so a 413 here can only have come from the product's own cap rather than the host's. */
+const pad = k => ("PO Number: 9" + (1000 + k) + "\nQuantity: 10 units\nSupplier: Someone Ltd\n").repeat(900);
+
 const get = async (path, headers = {}) => {
   const r = await fetch(BASE + path, { headers, redirect: "manual" });
   return { status: r.status, html: tidy(await r.text()), cookie: r.headers.getSetCookie?.() ?? [] };
@@ -55,6 +67,22 @@ const get = async (path, headers = {}) => {
 
 try {
   if (!await waitReady()) throw new Error(`server never came up:\n${out.slice(-1500)}`);
+
+  // ── 0. the port must be ours, or every assertion below proves nothing ──────
+  /*  A leftover `next start` from an earlier run answers on a reused port, and the suite then grades a
+      build that no longer exists — which is exactly how one run here reported a string that had been
+      deleted from the source. So an occupied port is a hard failure, not a shortcut. */
+  {
+    /* Every port in this sandbox looks "bound" to a probe, so ownership is proved by identity instead:
+       the build id Next writes into the page must equal the build id on disk. That is the difference
+       between testing this change and silently grading whatever `next start` survived from an earlier
+       run — which already produced one impossible result in this repo's history. */
+    const built = readFileSync(".next/BUILD_ID", "utf8").trim();
+    const page = await get("/");
+    check("the server answering this suite is the build on disk", page.html.includes(built),
+      `disk ${built}; page ${page.html.includes(built) ? "matches" : "does not contain it — stale server, kill it and re-run"}`);
+    if (!page.html.includes(built)) throw new Error(`the answer on ${BASE} is not this build (${built})`);
+  }
 
   // ── 1. a cold visitor with no cookie must land on a FINISHED run ───────────
   const root = await get("/");
@@ -224,6 +252,144 @@ try {
     check("a malformed approve is refused, not half-applied", rejected.status === 400);
   }
 
+  {
+    const { mkPdf, PO_LINES, PO_TWO_LINE_LINES, BLANK_PDF_LINES, INVOICE_GOOD, INVOICE_NO_PO_REF } =
+      await import("./pdf-fixture.mjs");
+
+    /* One upload, one paste, one scan, one two-line order, one invoice with no reference: five
+     * documents and three different outcomes, which is the whole product in one batch. */
+    const form = new FormData();
+    form.append("code", PILOT_CODE);
+    form.append("files", new Blob([mkPdf(PO_LINES)], { type: "application/pdf" }), "northgate-po.pdf");
+    form.append("files", new Blob([mkPdf(PO_TWO_LINE_LINES)], { type: "application/pdf" }), "two-line-order.pdf");
+    form.append("files", new Blob([mkPdf(BLANK_PDF_LINES)], { type: "application/pdf" }), "scan-of-an-invoice.pdf");
+    form.append("files", new Blob([INVOICE_GOOD.join("\n")], { type: "text/plain" }), "invoice.txt");
+    form.append("text", INVOICE_NO_PO_REF.join("\n"));
+    const t0 = Date.now();
+    const res = await fetch(`${BASE}/api/pilot`, { method: "POST", body: form });
+    check("the pilot room answers a code-carrying run", res.status === 200, `HTTP ${res.status}`);
+    check("a pilot run streams events rather than waiting to be finished",
+      (res.headers.get("content-type") ?? "").includes("x-ndjson"));
+    // The "we keep nothing" line is only true if no state comes back with the run.
+    check("a pilot run sets no cookie, so nothing follows the visitor anywhere",
+      (res.headers.getSetCookie?.() ?? []).length === 0,
+      (res.headers.getSetCookie?.() ?? []).join(",").slice(0, 40));
+
+    const text = await res.text();
+    const ev = text.split("\n").filter(Boolean).map(l => JSON.parse(l));
+    const stages = ev.filter(e => e.t === "stage");
+    const docs = ev.filter(e => e.t === "doc");
+    const done = ev.find(e => e.t === "done");
+    const start = ev.find(e => e.t === "start");
+    const ORDER = ["receive", "text", "classify", "extract", "gates", "route"];
+    const mine = k => stages.filter(st => st.i === k).map(st => st.stage);
+
+    check("the run says which engine did the work", start?.engine === "rules", `engine=${start?.engine}`);
+    check("five documents arrive and five documents are answered", docs.length === 5, `docs=${docs.length}`);
+    check("every readable document is walked through the six stages in order",
+      [0, 1, 3, 4].every(k => mine(k).join(",") === ORDER.join(",")), JSON.stringify(mine(0)));
+    check("a file with nothing readable in it stops after the text step, and says so",
+      mine(2).join(",") === "receive,text", JSON.stringify(mine(2)));
+    check("the PDF's text layer was read by the server, not assumed",
+      stages.some(st => st.stage === "text" && /pdf text layer/.test(st.detail ?? "")),
+      stages.filter(st => st.stage === "text").map(st => st.detail).join(" | ").slice(0, 70));
+    check("pasted text goes through the same intake as a file, so the two cannot disagree",
+      stages.some(st => st.i === 4 && st.stage === "text" && /pasted/.test(st.detail ?? "")),
+      stages.filter(st => st.i === 4 && st.stage === "text").map(st => st.detail).join(""));
+    check("a scan is held with its reason, never filled in",
+      docs.some(d => d.verdict?.status === "exception" && /OCR|text layer/i.test(d.verdict.note ?? "")),
+      docs.map(d => d.verdict?.note).join(" | ").slice(0, 90));
+
+    const clean = docs.find(d => d.verdict?.status === "committed");
+    check("a complete order clears every gate and comes back with a body prepared", !!clean,
+      docs.map(d => `${d.verdict?.status}:${(d.verdict?.flags ?? []).join("+")}`).join(" | "));
+    check("the quantity is read whole — 4,000, never a truncated 400 or 120",
+      clean?.verdict?.fields?.some(f => f.key === "quantity" && f.value === "4000"),
+      JSON.stringify(clean?.verdict?.fields?.map(f => [f.key, f.value]) ?? []).slice(0, 160));
+    check("every field on screen carries a confidence, and anything under 90% carries a reason",
+      (clean?.verdict?.fields ?? []).every(f => typeof f.confidence === "number" &&
+        (f.confidence >= 0.9 || f.value === "" || !!f.reason)));
+    check("the name on the row is the name the document actually printed",
+      clean?.verdict?.fields?.some(f => f.key === "customer" && /NORTHGATE/.test(f.value)),
+      JSON.stringify(clean?.verdict?.fields?.find(f => f.key === "customer")?.value ?? ""));
+
+    const twoline = docs.find(d => (d.verdict?.flags ?? []).some(f => /SKU/.test(f)));
+    check("a two-line order is held instead of one line being guessed at", !!twoline,
+      docs.map(d => (d.verdict?.flags ?? []).join("+")).join(" | "));
+    check("and the reason says the thing a buyer needs to hear: one row per write is a build decision",
+      /line|row/i.test(twoline?.verdict?.fields?.find(f => f.key === "sku")?.reason ?? ""),
+      twoline?.verdict?.fields?.find(f => f.key === "sku")?.reason?.slice(0, 80) ?? "no reason given");
+
+    const heldInvoice = docs.find(d => d.verdict?.flags?.includes("MISSING_PO_REF"));
+    check("an invoice with no PO reference is stopped, and no body is prepared for it",
+      heldInvoice?.verdict?.status === "exception" && heldInvoice?.verdict?.payload === null);
+    // Four of the five reached routing; the scan never did, so it never gets a routing line either —
+    // a stage list that pads itself out for a document that stopped early would be theatre.
+    check("nothing on the page is allowed to read as a write: every row closes the same way",
+      stages.filter(st => st.stage === "route").length === 4 &&
+      stages.filter(st => st.stage === "route").every(st => /nothing was written/.test(st.detail ?? "")),
+      stages.filter(st => st.stage === "route").map(st => st.detail).join(" | ").slice(0, 90));
+
+    check("the batch finishes well inside the platform's 60s ceiling",
+      Date.now() - t0 < 15_000, `${Date.now() - t0} ms for 5 documents`);
+    check("the totals describe this batch and nothing else", done?.store?.stats?.total === 5,
+      `total=${done?.store?.stats?.total}`);
+    check("no model call is claimed where none was made, and nothing is claimed as stored",
+      done?.store?.stats?.liveCalls === 0 && done?.stored === false);
+    const prepared = docs.flatMap(d => d.verdict?.payload ? [d.verdict.payload] : []);
+    check("each prepared body carries an idempotency key, so a re-run cannot double-post",
+      prepared.length >= 2 && prepared.every(p => /:/.test(String(p.idempotency_key ?? ""))),
+      `bodies=${prepared.length}`);
+    check("each body names the engine that produced it, because an audit trail has to",
+      prepared.every(p => p.provenance?.engine === "rules"),
+      JSON.stringify(prepared[0]?.provenance ?? {}).slice(0, 90));
+    check("a held document produces no body at all, rather than a partial one",
+      docs.filter(d => d.verdict?.status === "exception").every(d => d.verdict.payload === null));
+
+    // refusals, because an open upload endpoint is the thing this must never become
+    const wrong = await fetch(`${BASE}/api/pilot`, { method: "POST", body: new FormData() });
+    check("no code means no run", wrong.status === 403, `HTTP ${wrong.status}`);
+    const empty = await fetch(`${BASE}/api/pilot`, { method: "POST",
+      body: (() => { const f = new FormData(); f.append("code", PILOT_CODE); return f; })() });
+    check("an empty submission is answered, not crashed", empty.status === 400, `HTTP ${empty.status}`);
+    const big = new FormData();
+    big.append("code", PILOT_CODE);
+    for (let k = 0; k <= 12; k++)
+      big.append("files", new Blob([pad(k)], { type: "text/plain" }), `d${k}.txt`);
+    const flooded = await fetch(`${BASE}/api/pilot`, { method: "POST", body: big });
+    check("a run is bounded, so one click cannot become a bill", flooded.status === 413,
+      `HTTP ${flooded.status}`);
+    const oversize = await fetch(`${BASE}/api/pilot`, { method: "POST", body: (() => {
+      const f = new FormData(); f.append("code", PILOT_CODE);
+      f.append("files", new Blob(["x".repeat(1_600_000)], { type: "text/plain" }), "huge.txt");
+      return f; })() });
+    check("one enormous file is named and refused rather than silently dropped",
+      oversize.status === 200
+        ? (await oversize.text()).includes("caps one document at")
+        : oversize.status === 413, `HTTP ${oversize.status}`);
+
+    const html = (await get("/")).html;
+    check("the pilot room is on the page a buyer lands on", /Put your own paper through it/.test(html));
+    check("the page says out loud what the endpoint does not keep",
+      /no\s+database\s+behind\s+it/i.test(tidy(html)));
+  }
+
+  // ── 4c. the palette the components name must exist in the shipped CSS ─────
+  {
+    /* Tailwind drops a utility that matches no token — silently, with no build error, on a page that
+       still photographs fine. Every muted caption and hairline in this app depends on those classes
+       being real, so the built stylesheet is asked, not the config file. */
+    const html = (await get("/")).html;
+    const href = /href="(\/[^"]+\.css)"/.exec(html)?.[1];
+    check("the page ships its own stylesheet", !!href, href ?? "no css link found");
+    if (href) {
+      const css = await fetch(BASE + href).then(r => r.text());
+      for (const cls of [".text-mute", ".text-ink2", ".bg-paper2", ".border-rule2", ".text-amber"])
+        check(`the built stylesheet defines ${cls}`, css.includes(cls + "{"),
+          css.includes(cls + "{") ? "" : "class absent from the shipped CSS — the hierarchy would be inherited by accident");
+    }
+  }
+
   // ── 5. the README cannot drift from the code it describes ─────────────────
   const rm = readFileSync("README.md", "utf8");
   check("README has a real demo URL (no placeholder left)",
@@ -236,7 +402,7 @@ try {
 } catch (e) {
   fails.push(`threw: ${e.message}`);
 } finally {
-  server.kill("SIGTERM");
+  stopServer();
 }
 
 console.log(`\nverify — ${ok.length} passed, ${fails.length} failed\n`);
