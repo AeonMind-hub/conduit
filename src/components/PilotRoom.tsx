@@ -184,7 +184,7 @@ export function PilotRoom() {
   const busy = running || counts.done < rows.length;
 
   return (
-    <section className="mt-8" id="pilot">
+    <section className="mt-8 scroll-mt-[104px]" id="pilot">
       <div className="card-hero overflow-hidden">
         <div className="border-b border-rule px-4 py-3.5 sm:px-6">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
