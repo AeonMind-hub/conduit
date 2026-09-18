@@ -214,7 +214,7 @@ export function PilotRoom() {
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink2">
               {busy ? "running" : drag ? "release to read them" : "drop files here"}
             </span>
-            <span className="text-[13px] text-mute">or click to choose · one PDF, up to twelve documents a run</span>
+            <span className="text-[13px] text-mute">or click to choose · PDFs with a text layer, or text · twelve documents a run</span>
             <input
               ref={filesRef} type="file" multiple className="hidden"
               onChange={e => run(Array.from(e.target.files ?? []), "")}
