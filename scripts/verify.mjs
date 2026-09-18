@@ -384,10 +384,24 @@ try {
     check("the page ships its own stylesheet", !!href, href ?? "no css link found");
     if (href) {
       const css = await fetch(BASE + href).then(r => r.text());
-      for (const cls of [".text-mute", ".text-ink2", ".bg-paper2", ".border-rule2", ".text-amber"])
+      for (const cls of [".text-mute", ".text-ink2", ".bg-paper2", ".border-rule2", ".text-amber",
+        ".stamp", ".stamp-hold", ".meter"])
         check(`the built stylesheet defines ${cls}`, css.includes(cls + "{"),
           css.includes(cls + "{") ? "" : "class absent from the shipped CSS — the hierarchy would be inherited by accident");
     }
+  }
+
+  // ── 4d. a class used as a container for text is a bug, not a style choice ─
+  {
+    /*  .meter is 5px tall with overflow:hidden — it is a bar. Last pass, a gate flag was written into
+        one, and the code that explains a hold became an invisible sliver: no typecheck error, no build
+        error, and a screenshot small enough to read as fine. So the pattern itself is now refused. */
+    const room = readFileSync("src/components/PilotRoom.tsx", "utf8");
+    const badMeter = [...room.matchAll(/className=\{?["`'][^"`']*\bmeter[^"`']*["`'][^>]*>\s*\{/g)];
+    check("no text is ever placed inside a .meter element", badMeter.length === 0,
+      `${badMeter.length} occurrences`);
+    check("gate codes use the badge the palette defines for them",
+      /stamp-hold/.test(room) && !/className="meter[^"]*">\{f\}/.test(room));
   }
 
   // ── 5. the README cannot drift from the code it describes ─────────────────

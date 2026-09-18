@@ -282,7 +282,7 @@ export function PilotRoom() {
                     <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                       <span className={`font-mono text-[10.5px] uppercase tracking-[0.16em] ${tone}`}>{stamp}</span>
                       {v?.payload ? <span className="font-mono text-[10.5px] text-mute">{v.ref}</span> : null}
-                      {v?.flags?.length ? v.flags.map(f => <span key={f} className="meter hold">{f}</span>) : null}
+                      {v?.flags?.length ? v.flags.map(f => <span key={f} className="stamp stamp-hold">{f}</span>) : null}
                       {v && v.status !== "discarded" ? (
                         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-mute">
                           {v.engine === "live" ? "model + rules" : v.engine === "rules" ? "rules engine" : "no engine answered"}
@@ -321,8 +321,8 @@ export function PilotRoom() {
                                     {f.confidence > 0 ? pct(f.confidence) : "absent"}
                                   </span>
                                 </div>
-                                <div className="mt-0.5 h-[3px] w-full bg-rule2">
-                                  <span className="block h-full bg-ink" style={{ width: pct(f.confidence) }} />
+                                <div className={`meter mt-1${f.confidence >= 0.9 ? "" : f.confidence >= 0.85 ? " write" : " hold"}`}>
+                                  <i style={{ width: pct(f.confidence) }} />
                                 </div>
                                 <p className={`mt-1 text-[13.5px] leading-[1.45] ${f.value ? "text-ink" : "text-amber"}`}>
                                   {f.value || "not present in the document"}
