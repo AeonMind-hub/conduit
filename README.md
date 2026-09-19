@@ -1,195 +1,133 @@
-# Conduit — document intake automation
+# Conduit — paste a document, get a clean row
 
-Classifies inbound business documents, extracts the fields each type needs,
-validates them, and routes each one to the right destination system.
-Anything it cannot verify is **held for a human instead of guessed**.
+**Live, open, no code:** <https://conduit-demo-version.vercel.app>
 
-**Live demo:** <https://conduit-demo-version.vercel.app>
-**Repo for the demo:** this repository. If you are reading this after a message from me,
-the demo already has your company name and your volume in it — change nothing, press
-**Run pipeline** and then open **Analytics**.
+One screen. Put an order, an invoice, a booking note or a whole email into it — paste or file — and it
+reads out the fields each document type needs, runs them through the same gates a system of record would
+run, and routes the ones it can stand behind. Anything it cannot verify is **held with the reason printed
+beside it**, never filled in from a guess. A stranger on a phone gets a result in under a minute.
 
----
+> Emails with attachments arrive → Conduit classifies them, extracts the fields each type needs,
+> validates them, and writes clean rows into your ERP, accounting and WMS. Anything it cannot verify goes
+> to a human queue instead of being guessed.
 
-## The interface
+That is the product. Everything below is how this repository makes that claim checkable.
 
-Set as a document of record — warm paper, one ink colour, hairline rules, a serif for statements
-and a monospace for every figure, so a column of counts lines up the way it does in a ledger. Colour
-is a status and nothing else: ink where a batch walked through a stage, amber where a gate cut
-documents, green only for the write. The pulsing indicator appears during a run and never otherwise,
-and no screen claims to be watching a mailbox this deployment cannot reach.
+## Why the page looks like this
 
-Type is self-hosted (`src/app/fonts`, six woff2 files, ~173 kB) rather than pulled from a font CDN,
-because the demo gets opened on a phone on warehouse wifi and the first second is the whole
-impression. `NEXT_PUBLIC_*` variables retune the copy per prospect; nothing about the layout needs
-to change to rebrand it.
+The previous version was a seven-section operations console: stat strips, a pipeline animation, a ledger
+of 75 sample documents, an analytics tab projecting savings. All of it accurate, all of it describing the
+product instead of being it. It is gone. What is left is the thing visitors were being made to read about:
+an input, the run, the result.
 
-## What this is
+- `/` — the machine. Nothing else above the fold.
+- `/systems` — one page deeper, for whoever owns the integrations: the field definitions per document
+  type, the gate codes, and a payload produced by running a sample through the real engine **at request
+  time**, not a fixture.
+- `POST /api/pilot` — what the page calls. Multipart in (`files`, `text`), newline-delimited JSON out.
 
-A working deployment of the product, running on a **sample corpus**: 75 hand-authored documents
-(purchase orders, supplier invoices, delivery bookings, quote requests and noise) shaped like one
-distribution company's inbox. Under the figures on the first page it says
-"Sample corpus · 75 documents", and that is the whole
-disclosure — it is the same convention every enterprise demo uses, and it is why the numbers below
-are labelled with their denominators instead of hidden behind a hedge.
+## What is real and what is not
 
-No customer data was used, and nothing here claims a client outcome. What is on offer is the
-mechanism, shown at the volume and against the systems a prospect names.
-
-## Running your own documents
-
-The pilot room — section 02 of the home page, `POST /api/pilot` — takes a prospect's own files:
-PDFs with a text layer, text files, or pasted text. Each document visibly walks the same stages
-the sample run shows (`received → text → classify → fields → gates → route`, streamed as events),
-and the payoff is a field map with a confidence on every value and a sentence explaining anything
-under 90%, the exact body that would be sent to the destination system, and the same table as CSV.
-
-Nothing is stored, because there is nothing to store into: no database, no cookie written by the
-route, no copy kept after the response ends. A scan, an image, or a container this build cannot
-read comes back as **a hold naming the format**, never as a guess.
-
-It is gated on `PILOT_CODES` (one code per company) rather than left open, because an anonymous
-"upload your invoices" endpoint is a bill somebody else runs and a data request nobody answered.
-Without a code configured the endpoint refuses everything and the page says so.
-
-## What is real vs. simulated
-
-| Part | Status in this repo |
+| Part | Status |
 | --- | --- |
-| Classification + extraction, with a key | **Real model call** when `GEMINI_API_KEY` is set and `OFFLINE_DEMO` is unset. The prompt, JSON schema, per-field confidence and clamping live in `src/lib/engine.ts`. |
-| Classification + extraction, without a key | **Real code.** `src/lib/rules.ts` — labelled finders per document type over the same field definitions and the same gates. Deterministic, free, and it will not fill a field whose label is not in the document. |
-| File intake (the pilot room) | **Real.** `/api/pilot` reads a PDF's text layer with `unpdf`, plain text, or pasted text, and runs it through whichever engine the deployment has. |
+| Classification, extraction, per-field confidence | **Real code.** `src/lib/rules.ts` — labelled finders per document type over the field definitions in `src/lib/doctypes.ts` and the gates in `src/lib/types.ts`. Deterministic, free, and it will not fill a field whose label is not in the document. |
+| The gates | **Real code.** 85% on a required field, 80% on document type, confidences floored and never rounded up. A missing value prints as missing. |
+| File intake | **Real.** A PDF's text layer is read with `unpdf`; plain text and pasted text take the same path and the same caps. |
 | Multi-line documents | **Not implemented.** One row per write, so a two-line order is *held* (`LOW_CONF_SKU`) rather than its first line being posted as though it were the whole order. Line-level rows are a pilot build, priced as one. |
-| OCR, Word, Excel | **Not implemented.** Those arrive as a hold naming the format, which is the honest answer and not an apology: inventing text from a scan is how an ERP ends up with a quantity nobody typed. |
-| Thresholds, holds, corrections, audit trail, routing actions | **Real code.** `src/lib/types.ts` (`blocks`, `failedRules`, `rates`), `src/lib/session.ts`. |
-| The 75 documents and their expected extractions | **Authored fixtures** in `src/lib/corpus.ts`, so the offline demo costs nothing and behaves identically for two people at once. |
-| Writes to an ERP / accounting / WMS / CRM | **Not implemented.** `src/lib/actions.ts` records what *would* be written, in the shape a real integration needs. A pilot adds the connectors against one client's system. |
-| Email inbox ingestion | **Not implemented.** Documents arrive as files, by paste (`Run this one`), or in a pilot by a mailbox rule. |
+| OCR, Word, Excel, images | **Not implemented.** Those come back as a hold naming the format — `UNREADABLE`, "that is a scan, and a scan needs OCR". Inventing text from a scan is how an ERP ends up with a quantity nobody typed. |
+| The body written to your system | **Prepared, never posted.** `src/lib/payload.ts` builds it (values, confidences, provenance, idempotency key) and the page prints it. This deployment holds no credentials for anything. |
+| Email ingestion | **Not implemented.** In production intake is a mailbox rule, not a form. |
+| A model behind the reader | **Present and deliberately unreachable from the public page.** `src/lib/engine.ts` is a real Gemini adapter with the clamping an audit trail needs, kept for the pilot. The open machine calls no model at all, because a free-tier key would put a stranger's invoices into a training corpus. |
 
-Two engines, one set of gates, and they are not interchangeable in an audit:
+## What happens to what you paste
 
-- **The paste panel** (section 02) is the *model* path. With `OFFLINE_DEMO=1` on the public
-  deploy there is no key to call, so a pasted document is **held with `ENGINE_UNAVAILABLE`
-  rather than committed** — the product's own rule applied to its own failure mode. Set a billed
-  `GEMINI_API_KEY` and clear `OFFLINE_DEMO` to watch the model extract it instead.
-- **The pilot room** is the *rules* path and needs no key at all, which is why it can be handed
-  to a stranger: nothing leaves the request, nothing costs money, and every row still has to
-  clear `blocks()` in `src/lib/types.ts`. The screen names which engine produced each document,
-  because "the AI did it" is not an answer an auditor accepts.
+Nothing. There is no database behind the endpoint and no cookie written by it — the run exists inside the
+request and in the visitor's own tab. The caps are what make an open endpoint safe rather than a gate:
+`src/app/api/pilot/route.ts` takes at most 12 documents, 1.5 MB a file, reads 12,000 characters of each,
+and calls no billable engine. The last half of that sentence is the important one: the machine cannot be
+made to spend money on a stranger's curiosity.
 
-## The numbers, stated with their denominators
+## The corpus, and both denominators
 
-Across the 75-document corpus:
+The rules engine is measured against a **sample corpus**: 75 hand-authored documents shaped like one
+distribution company's inbox (purchase orders, supplier invoices, delivery bookings, quote requests,
+noise). They are **ours**; no customer data was used, and nothing on the site is presented as a client
+outcome.
 
 - **66 committed with no human, 3 held, 6 discarded as noise.**
-- **88% of everything received** (66 of 75) and **96% of actionable documents**
-  (66 of 69, excluding the noise that never needed a person).
+- **88% of everything received** (66 of 75) and **96% of actionable documents** (66 of 69 — the noise that
+  never needed a person is not in the second denominator).
 
-Both figures are computed in one place (`rates()` in `src/lib/types.ts`) and the UI prints
-both. A single headline percentage is how a demo gets caught out in one question.
+Both figures are recomputed from the engine on every `npm run engine-check`, next to assertions that the
+README's numbers are what the code produced. Quoting one denominator is how a demo gets caught out in a
+single question, so neither number travels alone.
 
-Field accuracy is only quoted after the held queue is cleared, and the analytics tab says
-"run the pipeline to measure" instead of showing a zero.
+## The four examples on the page
 
-## Run it
+`src/lib/samples.ts` holds them, and each one exists to demonstrate a different outcome: a purchase order
+that clears, an invoice with no PO reference that is held (`MISSING_PO_REF`), a delivery booking routed to
+the warehouse system rather than to finance, and a newsletter that is set aside.
+
+Those sentences are claims about the product, so they are tested as claims: `scripts/engine-check.ts`
+fails if any sample stops producing the outcome its button promises, and `scripts/verify.mjs` runs all four
+through the live HTTP endpoint and checks the verdicts, the flags, the payload shapes and the refusals.
 
 ```bash
 npm install
-npm run demo     # offline fixtures, no API key, no cost
-# http://localhost:3000  → press "Run pipeline", then "Run this one" on any real document
+npm run check   # typecheck && build && verify (against the built server) && engine-check
+npm run demo    # local server at http://localhost:3000
 ```
 
-Live model calls:
+`verify.mjs` grades the shipped artifact, not the source: it boots `.next`, proves it is talking to this
+build by build id, then checks the page for a price list, a gate, a numbered tour of itself and a second
+disclosure — and fails on any of them.
 
-```bash
-cp .env.local.example .env.local   # put your GEMINI_API_KEY in, set OFFLINE_DEMO=
-npm run dev
-```
+## Tuning per prospect
 
-Check the shipped build instead of trusting this README:
-
-```bash
-npm run typecheck && npm run build && npm run verify
-```
-
-`npm run verify` boots the built app and asserts that a cold visitor lands on a **finished**
-run (66 committed, both denominators present), that the empty state never renders "$0 a
-year", and that the visitor cookie stays inside the 4KB-per-domain limit.
-
-## Tuning for a prospect
-
-Every figure a prospect reads is an env var, so a per-prospect demo is a **deploy with
-different numbers, not an edited codebase**:
+Every figure a prospect reads is an env var, so a per-prospect deploy is different numbers rather than an
+edited codebase. `src/lib/config.ts` holds them; `NEXT_PUBLIC_*` values are not secrets.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `NEXT_PUBLIC_CLIENT_NAME` | `Northwind Supply Co` | The company whose inbox this is. Appears in the masthead, the page title and the acknowledgement letters. |
-| `NEXT_PUBLIC_CLIENT_INDUSTRY` | `distribution` | Context line. |
-| `NEXT_PUBLIC_INTAKE_ADDRESS` | `ops@<client>.com` | The mailbox their documents arrive in. Shown in the masthead and on Connections. |
-| `NEXT_PUBLIC_SYSTEMS` | `ERP=NetSuite,AP=Xero,WMS=SAP Business One,CRM=HubSpot` | **Their actual stack.** Naming the system they type into is what turns a look into a meeting. |
-| `NEXT_PUBLIC_ENV_LABEL` | `Sandbox` | Environment chip on the integrations screen. |
-| `NEXT_PUBLIC_TAGLINE` | `Inbound document automation` | Page title and social preview card. |
-| `NEXT_PUBLIC_CORPUS_LABEL` | `Sample corpus · 75 documents` | The one disclosure the product makes, under the figures on the front page. Keep it — and keep it that short. |
-| `NEXT_PUBLIC_DAILY_VOLUME` | `60` | Their documents per day. The ROI projection is meaningless if this is not theirs. |
-| `NEXT_PUBLIC_HOURLY_COST` | `34` | Loaded hourly cost of the person doing it today. |
-| `NEXT_PUBLIC_BUILD_FEE` / `NEXT_PUBLIC_MONTHLY_FEE` | `450` / `120` | Kept for the proposal maths. **Not rendered in the app** — a price inside a product reads as a marketplace listing; a price in a proposal reads as a quote. |
-| `NEXT_PUBLIC_DEMO_URL` | this deploy | Canonical URL — the one you put in emails and in the repo's About field. |
-| `NEXT_PUBLIC_MAX_LIVE_DOCS` | `4` | How many pasted documents a visitor keeps (cookie-sized, so this must stay small). |
-| `OFFLINE_DEMO` / `GEMINI_API_KEY` / `GEMINI_MODEL` | offline | Engine mode. |
+| `NEXT_PUBLIC_CLIENT_NAME` | `Northwind Supply Co` | Whose inbox the samples are shaped like. Masthead and page title. |
+| `NEXT_PUBLIC_INTAKE_ADDRESS` | `ops@<client>.example` | Where documents arrive in production. Footer line. |
+| `NEXT_PUBLIC_SYSTEMS` | `ERP=NetSuite,AP=Xero,WMS=SAP Business One,CRM=HubSpot` | **Their stack.** Naming the system someone types into is what turns a look into a meeting. |
+| `NEXT_PUBLIC_TAGLINE` | `Inbound document automation` | Page title and preview card. |
+| `NEXT_PUBLIC_DEMO_URL` | this deploy | The canonical URL for emails and the repo's About field. |
+| `PILOT_MAX_DOCS` / `PILOT_MAX_BYTES` / `PILOT_MAX_CHARS` | `12` / `1500000` / `12000` | The cost bounds of one run. |
+| `OFFLINE_DEMO` / `GEMINI_API_KEY` / `GEMINI_MODEL` | offline | Only the pilot adapter reads these. The public page never does. |
 
-Adding a document type is one entry in `src/lib/doctypes.ts` — fields with `required` flags,
-destination, manual minutes, risk line. No UI code knows about any specific type.
+Adding a document type is one entry in `src/lib/doctypes.ts` — fields with `required` flags, destination,
+manual minutes. No UI code knows about any specific type.
 
 ## Proposing it
 
-The demo's job is to make a five-figure build look like the obvious next step, not to look
-like a cheap thing to try. So the pricing never appears on screen, and the offer is one breath:
-
-> Emails with attachments arrive → Conduit classifies them, extracts the fields each type needs,
-> validates them, and writes clean rows into your ERP, accounting and WMS. Anything it cannot
-> verify goes to a human queue instead of being guessed.
-
-**The ladder**
+The price never appears on screen: a number inside a product reads as a listing, a number in a proposal
+reads as a quote. The ladder lives here and in the message.
 
 | Step | Price | What they get |
 | --- | --- | --- |
-| Pilot | $1,500, credited against the build | 50 of their real documents through the same thresholds. The rows, the accuracy number on their mix, every hold with its flag. |
+| Pilot | $1,500, credited against the build | 50 of their real documents through these thresholds. The rows, the accuracy number on their mix, every hold with its flag. |
 | Build | $4,500–7,500 | Intake mailbox + one document type + a live write to their system of record, behind their own approval. |
 | Care | $450/mo | New types, rule changes, held-queue reports, the audit trail kept honest. |
 
-**The clause that closes it:** *"If more than 2 documents in 20 need hand-fixing, don't pay."* It
-only sounds generous because the gate is real: 85% confidence on a required field, 80% on document
-type, a missing value never written at full confidence.
+**The clause that closes it:** *"Run a dozen of your real orders and invoices through it — the ones that
+give your data entry people trouble. Anything it can't verify it will refuse to write and tell you why. If
+more than 2 in 20 need hand-fixing, don't pay."* It only sounds generous because the gate is real.
 
-**Five presentation rules**
+Five rules for the same conversation:
 
-1. Never say "demo" out loud; say *"your inbox, one document, right now"* and paste their PO.
-2. Send the **Connections** screen to whoever owns the ERP. Payload + field map + idempotency key
-   is the conversation that turns "nice tool" into "scoped project".
-3. Lead with what gets **held**, not what gets committed. The $18,420 invoice with no PO reference
-   is the reason a finance manager trusts the other 66.
-4. State both denominators, unprompted. It kills the one question that would otherwise end the call.
-5. End on a single ask with an easy out — the 50 documents. No discount, no second email, no
-   "just checking in".
-
-## Recording it (silent screen capture needs captions)
-
-Press `.` to toggle the caption bar, `.`/`,` to step, `C` to hide it for the take. The
-captions exist because the most important moment in this demo — a field deliberately left
-empty and held — otherwise looks like a blank box on a muted video.
-
-## Held queue
-
-Three documents are held on purpose:
-
-- **An $18,420 invoice with no PO reference.** It cannot be three-way matched. Posting it is
-  how duplicate and fraudulent invoices get paid. Flag: `MISSING_PO_REF`.
-- **A message asking for pricing that also signals a purchase order is coming.** Classified
-  as a quote request at 61% — below the routing threshold. Sending it to the CRM loses the
-  order; sending it to the ERP invents one. So it escalates. Flag: `AMBIGUOUS_TYPE`.
-- Plus whatever you paste that the model is not sure about.
+1. Never say "demo". The ask is *your paperwork, run now*.
+2. Send `/systems` to whoever owns the ERP: payload, field definitions and idempotency key is the
+   exchange that turns "nice tool" into "scoped project".
+3. Lead with what gets **held**. The £18,420 invoice with no PO reference is why a finance manager trusts
+   the other 66.
+4. State both denominators, unprompted.
+5. One ask, easy out. No discount, no second email, no "just checking in".
 
 ## Status
 
-Working demo, one corpus, two document sources (fixture + live paste). Not published as a
-package, no tests beyond `scripts/verify.mjs`, no inbox connector, no deployed client.
+One page, one endpoint, one deeper page. Rules engine + gates + payload builder, measured against a
+75-document sample corpus. No account system, no storage, no inbox connector, no published package, no
+deployed client. The tests are `scripts/verify.mjs` and `scripts/engine-check.ts`; there is nothing else,
+which is the point.

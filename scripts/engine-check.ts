@@ -2,10 +2,14 @@
  *  Run: npx tsx scripts/engine-check.ts   */
 import { toFixture } from "../src/lib/engine";
 import { blocks, failedRules, DOC_TYPES } from "../src/lib";
+import { rates, pct } from "../src/lib/types";
 import { runRules } from "../src/lib/rules";
+import { EMPTY_WIRE, rebuild } from "../src/lib/session";
 import { DOCS } from "../src/lib/corpus";
 import { CLASSIFY_THRESHOLD } from "../src/lib/types";
-import { PILOT_OPEN, MAX_PILOT_DOCS, MAX_LIVE_DOCS, PILOT_CODES } from "../src/lib/config";
+import { MAX_PILOT_DOCS, MAX_PILOT_BYTES, PILOT_CHARS_PER_DOC } from "../src/lib/config";
+import { readFileSync } from "node:fs";
+import { SAMPLES } from "../src/lib/samples";
 
 let bad = 0;
 let ran = 0;
@@ -133,11 +137,74 @@ const mail = runRules("You are receiving this because you subscribed. Unsubscrib
 t("a newsletter is set aside with a reason, not classified as an order",
   mail.relevant === false && !!mail.rejectReason);
 
-// The pilot room's guard is a config fact the whole safety story depends on.
-t("no pilot code on this deploy means the endpoint is shut, not open",
-  PILOT_CODES.length === 0 ? PILOT_OPEN === false : PILOT_OPEN === true, PILOT_CODES.length ? "codes present" : "none configured");
-t("a pilot run is bounded larger than the cookie path, because it stores nothing",
-  MAX_PILOT_DOCS > MAX_LIVE_DOCS, `${MAX_PILOT_DOCS} vs ${MAX_LIVE_DOCS}`);
+/* The page is open to anyone, so the safety story is no longer a gate: it is what the endpoint refuses
+   to touch. These assertions read the shipped route's source, because the claim is about the code path a
+   stranger reaches — an env var proving the same thing would only prove this machine's configuration. */
+const route = readFileSync("src/app/api/pilot/route.ts", "utf8");
+const cfg = readFileSync("src/lib/config.ts", "utf8");
+const CODE_WORDS = new RegExp(["PILOT" + "_CODES", "PILOT" + "_OPEN", "PILOT" + "_MODEL_BILLED"].join("|"));
+t("the public path calls no model, so it cannot be billed",
+  !/runLive/.test(route.replace(/\/\*[\s\S]*?\*\//g, "")) && !/^import .*(engine|MODEL)/m.test(route),
+  "no engine import in src/app/api/pilot/route.ts");
+t("the public path is open on purpose: no access code anywhere in src",
+  !CODE_WORDS.test(cfg) && !CODE_WORDS.test(route));
+t("the public path keeps nothing: no cookie is written by the endpoint",
+  !/Set-Cookie|respondWithWire/.test(route));
+t("one run is bounded in documents, bytes and characters",
+  MAX_PILOT_DOCS === 12 && MAX_PILOT_BYTES === 1_500_000 && PILOT_CHARS_PER_DOC === 12_000,
+  `${MAX_PILOT_DOCS} docs · ${MAX_PILOT_BYTES / 1e6} MB · ${PILOT_CHARS_PER_DOC} chars`);
+t("the bounds are enforced in the route, not only configured",
+  /MAX_PILOT_DOCS/.test(route) && /MAX_PILOT_BYTES/.test(route));
+
+/* The four examples on the page each promise one outcome in prose. The prose is the claim, so the claim
+   is asserted here against the same engine the browser calls. A sample that quietly changes its outcome
+   is worse than no sample: it is the one thing every visitor tries. */
+for (const sm of SAMPLES) {
+  const fx = runRules(sm.body);
+  const status = !fx.relevant ? "discarded" : blocks(fx.extraction!, DOC_TYPES[fx.type])
+    ? "held" : "committed";
+  t(`the sample "${sm.label}" still ${sm.promise}`,
+    status === sm.expect.outcome && fx.type === sm.expect.type
+      && (!sm.expect.flag || failedRules(fx.extraction!, DOC_TYPES[fx.type]).includes(sm.expect.flag!)
+          || (fx.rejectReason ?? "").includes(sm.expect.flag!)),
+    `${fx.type} / ${status}${sm.expect.flag ? ` / ${failedRules(fx.extraction!, DOC_TYPES[fx.type]).join(",")}` : ""}`);
+}
+
+/* Reference reading is the field most likely to be wrong in the wild, and the strict-label pass in front
+   of the loose one is the whole difference between "MERIDIAN FASTENERS LTD / SUPPLIER INVOICE" stealing
+   the number and the line that says `Invoice No: MF-9930` providing it. */
+t("a letterhead line cannot become the invoice number",
+  /MF-9930/.test(runRules("MERIDIAN FASTENERS LTD\nSUPPLIER INVOICE\nInvoice No: MF-9930\nAmount due: £18,420.00").extraction!.values.invoice_no ?? ""),
+  runRules("MERIDIAN FASTENERS LTD\nSUPPLIER INVOICE\nInvoice No: MF-9930\nAmount due: £18,420.00").extraction!.values.invoice_no);
+const bare = runRules("MERIDIAN FASTENERS LTD\nInvoice 9930\nAmount due: 18,420.00 GBP");
+t("a bare label with no colon is still read, by the loose pass behind the strict one",
+  bare.extraction!.values.invoice_no === "9930", String(bare.extraction!.values.invoice_no));
+const lbl = runRules("MERIDIAN FASTENERS LTD\nInvoice reference: NW-5521\nAmount due: 100 GBP");
+t("the word \"reference\" is not read as the label \"ref\" and its tail as the value",
+  (lbl.extraction!.values.invoice_no ?? "") === "NW-5521", String(lbl.extraction!.values.invoice_no));
+
+/* Both denominators, computed rather than remembered — and computed by the same function the product
+   uses, because "66 of 75" is a statement about the pipeline, not about `runRules` in isolation: a held
+   document that a fixture then corrects is committed, and a scorer that ignores the corrections reports
+   16 of 75 with complete confidence. A hardcoded total is how a suite ends up lying. */
+{
+  const store = rebuild({ ...EMPTY_WIRE, d: DOCS.map(d => d.id) });
+  const { total, autoCommitted: committed, exceptions: held, discarded } = store.stats;
+  /* Quoted through the product's own `rates()` and `pct()`, so this check fails if the sentence on the
+     page and the sentence in the README ever come apart — one of the two has to be wrong then, and it
+     should be the code that is fixed rather than the claim that is quietly softened. */
+  const r = rates(store.stats);
+  t("88% of everything received is committed with no human in the loop",
+    pct(r.onReceived) === "88%", `${r.auto}/${r.received} = ${pct(r.onReceived)}`);
+  t("96% of actionable documents is committed, and the noise is counted out of it",
+    pct(r.onActionable) === "96%", `${r.auto}/${r.actionable} = ${pct(r.onActionable)}`);
+  t("the three held and six discarded are the numbers the README quotes",
+    committed === 66 && held === 3 && discarded === 6 && total === 75,
+    `${committed} committed, ${held} held, ${discarded} discarded of ${total}`);
+  t("nothing is committed that a gate blocks",
+    store.records.every(r => r.auto === true) && store.records.length === committed,
+    `${store.records.length} records`);
+}
 
 // counted, never remembered: a hardcoded total is how a suite ends up reporting 19 assertions
 // while running 28, which is the kind of number a buyer checks and a vendor does not.

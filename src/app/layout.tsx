@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import ShellWrap from "@/components/ShellWrap";
+import { Chrome } from "@/components/Chrome";
 import { CLIENT_NAME, DEMO_URL, TAGLINE, INTAKE_ADDRESS } from "@/lib/config";
 
 /*
@@ -48,16 +48,18 @@ const mono = localFont({
   data is a sample corpus is on the page itself, in one place.
 */
 export const metadata: Metadata = {
-  title: `Conduit · ${CLIENT_NAME} — ${TAGLINE}`,
+  title: `Conduit · ${CLIENT_NAME} — paste a document, get a clean row`,
   description:
-    "Inbound documents are classified, extracted, validated and written to the systems of record. "
-    + "Anything that cannot be verified is held for a human and never guessed. "
-    + `Intake ${INTAKE_ADDRESS} · sample corpus of 75 documents.`,
+    "Orders, invoices and booking notes arrive as text or PDF. Every field your systems need is read "
+    + "out of the document, checked the way your systems will check it, and routed. Anything it cannot "
+    + "verify it holds and tells you why, instead of writing a guess.",
   openGraph: {
-    title: `Conduit · ${CLIENT_NAME} — ${TAGLINE}`,
-    description: "75 documents land in the right system. Three are held for a human, on purpose.",
+    title: `Conduit · ${CLIENT_NAME}`,
+    description: "Run your own paperwork through it. See what it reads, and what it refuses to invent.",
     url: DEMO_URL,
   },
+  twitter: { card: "summary_large_image", title: `Conduit · ${CLIENT_NAME}`,
+    description: "Paste a document. Get a clean row." },
 };
 
 export const viewport = { width: "device-width", initialScale: 1, themeColor: "#f2efe8" };
@@ -67,9 +69,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-theme="record"
           className={`${display.variable} ${text.variable} ${mono.variable}`}>
       <body>
-        {/* ShellWrap is the frame — masthead, measure, footer. Dropped it once while rewriting this
-            file and the page rendered as bare text flush against the viewport edge. */}
-        <ShellWrap>{children}</ShellWrap>
+        {/* Chrome is the frame — nameplate, measure, footer. A page was once rendered as bare text
+            flush against the viewport edge because a frame went missing while this file was rewritten,
+            so it lives here, where there is exactly one place for it to be wrong. */}
+        <Chrome>{children}</Chrome>
       </body>
     </html>
   );

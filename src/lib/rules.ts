@@ -238,26 +238,45 @@ export function findRef(text: string, kind: "po" | "invoice" | "any",
   opts: { allowShape?: boolean; exclude?: string[]; /** default true — a reference with no digit in it is a phrase, not a reference */ needDigits?: boolean } = {}): Hit {
   const blob = asBlob(text);
   const REF = String.raw`([A-Z0-9][A-Z0-9][A-Z0-9\/.\-_]{2,22})`;
-  const sets = kind === "po" ? [
-      new RegExp(String.raw`(?:purchase\s+order|\bpo\b|order)\s*(?:no|number|ref|reference|#)?\s*[:#=\-]?\s*${REF}`, "i"),
-      new RegExp(String.raw`against\s*(?:po|order)\s*[:#=\-]?\s*${REF}`, "i"),
-    ] : kind === "invoice" ? [
-      new RegExp(String.raw`invoice\s*(?:no|number|#|ref|reference)?\s*[:#=\-]?\s*${REF}`, "i"),
-    ] : [
-      new RegExp(String.raw`(?:quote|quotation|delivery|booking|job|consignment|goods)\s*(?:no|number|ref|reference|#)?\s*[:#=\-]?\s*${REF}`, "i"),
-    ];
+  const KW = {
+    po: String.raw`(?:purchase\s+order|\bpo\b|order)`,
+    invoice: String.raw`invoice`,
+    any: String.raw`(?:quote|quotation|delivery|booking|job|consignment|goods)`,
+  }[kind];
+
+  /* Two passes over the same keywords.
+
+     `STRICT` demands that the keyword be followed by something marking a value — "No", "#", a colon —
+     which is the reading you can stand behind. The loose pass behind it still accepts "Invoice 9930"
+     flat, so nothing that used to be understood stops being understood.
+
+     The order matters more than it looks. A letterhead line reading "SUPPLIER INVOICE" sits before the
+     field the document actually labels, and a single greedy match there used to consume the line,
+     reject its own capture for carrying no digits, and stop — costing a real invoice its number and
+     holding it on a shape-only 0.84. Strict first, and every match scanned rather than only the first,
+     is what makes the labelled reading win when the document does label it. */
+  /* `\b` after the label is not decoration: without it "reference" is matched as the label "ref" and
+     the rest of the word is captured as the value — "erence", no digits, rejected, field empty. */
+  const STRICT = String.raw`\s*(?:(?:no|number|ref|reference|#)\b\s*[:#=\-]?\s*|[:#=\-]\s*)` + REF;
+  const LOOSE = String.raw`\s*(?:no|number|ref|reference|#)?\s*[:#=\-]?\s*` + REF;
+  const sets = [
+    new RegExp(KW + STRICT, "i"),
+    new RegExp(KW + LOOSE, "i"),
+    ...(kind === "po" ? [new RegExp(String.raw`against\s*(?:po|order)\s*[:#=\-]?\s*` + REF, "i")] : []),
+  ];
 
   for (const re of sets) {
-    const m = re.exec(blob);
-    if (!m) continue;
-    const raw = m[1].replace(/[.\-_:]+$/, "");
-    // Refs carry digits by nature; a captured word ("awaiting confirmation", "per below") is a
-    // sentence, not a reference, and must never be written into a key column.
-    const digitless = opts.needDigits !== false && !/\d/.test(raw);
-    if (raw.length < 3 || digitless || (opts.exclude ?? []).includes(raw)) continue;
-    const digits = /\d/.test(raw);
-    return { value: raw, confidence: digits ? 0.96 : 0.82, evidence: m[0].trim().slice(0, 90),
-      why: digits ? undefined : "no digits in this reference, so it matched on position rather than on a reference pattern" };
+    const scan = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+    for (let m = scan.exec(blob); m; m = scan.exec(blob)) {
+      const raw = m[1].replace(/[.\-_:]+$/, "");
+      // Refs carry digits by nature; a captured word ("awaiting confirmation", "per below") is a
+      // sentence, not a reference, and must never be written into a key column.
+      const digitless = opts.needDigits !== false && !/\d/.test(raw);
+      if (raw.length < 3 || digitless || (opts.exclude ?? []).includes(raw)) continue;
+      const digits = /\d/.test(raw);
+      return { value: raw, confidence: digits ? 0.96 : 0.82, evidence: m[0].trim().slice(0, 90),
+        why: digits ? undefined : "no digits in this reference, so it matched on position rather than on a reference pattern" };
+    }
   }
 
   if (opts.allowShape === false) return null;

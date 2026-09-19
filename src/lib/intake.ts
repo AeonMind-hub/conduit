@@ -74,7 +74,7 @@ export async function readUpload(file: File, maxBytes: number): Promise<Picked> 
   }
 
   if (kind === "image")
-    return { ...base, unreadable: "an image, and this deployment runs no vision model — a photo of an invoice is exactly what the pilot room is built to read once one is enabled, so it is held here rather than guessed at" };
+    return { ...base, unreadable: "an image, and this deployment runs no vision model — a photo of an invoice is exactly what a pilot build reads once one is enabled, so it is held here rather than guessed at" };
 
   if (kind === "text") {
     const clean = new TextDecoder("utf-8", { fatal: false }).decode(buf).replace(/\u0000/g, "").trim();
@@ -90,7 +90,7 @@ export async function readUpload(file: File, maxBytes: number): Promise<Picked> 
   if (printable.length > 120 && /Invoice|Order|Qty|Total|PO\b|Delivery/i.test(printable))
     return { ...base, text: printable.slice(0, PILOT_CHARS_PER_DOC), how: "plain", truncated: printable.length > PILOT_CHARS_PER_DOC };
 
-  return { ...base, unreadable: `${file.type || "an unrecognised file type"} is not something this deployment can read yet — the pilot room takes a PDF with a text layer, plain text, or pasted text. Word and Excel intake is a build line, not a silently-skipped file` };
+  return { ...base, unreadable: `${file.type || "an unrecognised file type"} is not something this deployment can read yet — the machine takes a PDF with a text layer, plain text, or pasted text. Word and Excel intake is a build line, not a silently-skipped file` };
 }
 
 /** Pasted text goes through the same caps, so "paste" and "upload" cannot disagree. */

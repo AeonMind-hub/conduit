@@ -1,31 +1,34 @@
-import type { Doc } from "@/lib/types";
 import { runRules } from "@/lib/rules";
-import { runLive } from "@/lib/engine";
 import { readUpload, fromPaste, type Picked } from "@/lib/intake";
 import { EMPTY_WIRE, pushLive, rebuild, nextLiveId, type Wire } from "@/lib/session";
 import { payloadFor } from "@/lib/payload";
 import { DOC_TYPES } from "@/lib/doctypes";
 import { blocks, failedRules } from "@/lib/types";
-import { LIVE_ENABLED, MODEL, PILOT_CODES, PILOT_OPEN, PILOT_MODEL_BILLED,
-  MAX_PILOT_DOCS, MAX_PILOT_BYTES } from "@/lib/config";
+import { MAX_PILOT_DOCS, MAX_PILOT_BYTES, PILOT_CHARS_PER_DOC } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * The pilot room: a client's own documents, run through the real pipeline, in one request.
+ * The machine behind the paste box, and the only piece of this product a stranger ever touches.
+ *
+ * It is open — no code, no account, no cookie — because the thing worth selling takes thirty seconds,
+ * and a form in front of it costs the sale. What keeps it safe is not a gate but bounds: at most
+ * MAX_PILOT_DOCS documents of MAX_PILOT_BYTES bytes, PILOT_CHARS_PER_DOC characters read of each,
+ * rules only, no model, nothing stored. A prospect can send the link to their whole team and the worst
+ * case is a few megabytes of string matching.
  *
  * Nothing is stored. There is no database behind this route and no cookie written by it — the run
- * exists in the request and in the visitor's browser tab, and the server keeps neither. That is not
- * a privacy slogan, it is the shape of the code, and it is the reason a prospect can drop a real
- * supplier invoice on the page without a data-processing agreement first.
+ * exists in the request and in the visitor's own tab. That is not a privacy slogan, it is the shape of
+ * the code, and it is why someone can drop a real supplier invoice here without a data-processing
+ * agreement first.
  *
- * It is also gated on a code, deliberately: an open "upload your invoices" endpoint on the public
- * internet is a bill someone else runs and a breach waiting to happen. Codes are set in PILOT_CODES.
+ * `runLive` — the model, which would send document text to a third party — is imported by nothing here
+ * on purpose: a free-tier key on a public page would put strangers' invoices into a training corpus.
+ * It stays reachable only from a private build, so the open path is deterministic and cannot be billed.
  *
  * Events are streamed as newline-delimited JSON so the browser can show each document moving through
- * the same stages the sample run shows. The pacing the visitor sees is done in the client — the
- * server does not sleep to look busy.
+ * the stages. The pacing a visitor sees is done in the client — the server does not sleep to look busy.
  */
 
 const enc = new TextEncoder();
@@ -48,7 +51,8 @@ interface Verdict {
 
 /** What the browser gets for one finished document: the values, their confidences, and either the
  *  payload that would be written or the code that stopped it. */
-function shape(picked: Picked, fx: ReturnType<typeof runRules>, store: ReturnType<typeof rebuild>, id: number, note?: string) {
+function shape(picked: Picked, fx: ReturnType<typeof runRules>, store: ReturnType<typeof rebuild>, id: number,
+  note?: string, text?: string) {
   const def = DOC_TYPES[fx.type];
   const proc = store.processed[id];
   const rec = store.records.find(r => r.sourceDocId === id);
@@ -75,9 +79,13 @@ function shape(picked: Picked, fx: ReturnType<typeof runRules>, store: ReturnTyp
     engine: proc?.engine ?? "rules",
     note: note ?? proc?.note,
     /** The exact body that would be POSTed. Shown, never sent — nothing writes to a client system
-     *  from this deployment, and the page says so rather than implying otherwise. */
-    payload: rec ? payloadFor(rec, store) : null,
+     *  from this deployment, and the page says so rather than implying otherwise. The document's own
+     *  text goes into the key so that the same paperwork sent twice is recognised as one order. */
+    payload: rec ? payloadFor(rec, store, { text: text ?? picked.text }) : null,
     ref: rec?.ref ?? null,
+    /** When the classifier threw a document away, the code travels: the page turns it into a sentence,
+     *  and the tests can then assert the refusal rather than admire it. */
+    reject: !fx.relevant ? (fx.rejectReason ?? "NOT_CLASSIFIED") : null,
   } satisfies Verdict & Record<string, unknown>;
 }
 
@@ -85,24 +93,20 @@ export async function POST(req: Request) {
   const fail = (message: string, status: number) =>
     Response.json({ error: message }, { status, headers: { "cache-control": "no-store" } });
 
-  if (!PILOT_OPEN)
-    return fail("The pilot room is not open on this deployment. It runs on an access code, so a link cannot be pointed at a stranger's invoices.", 503);
-
   const form = await req.formData().catch(() => null);
-  if (!form) return fail("This endpoint takes a multipart form: files under `files`, an access code under `code`, and optional pasted text under `text`.", 400);
-
-  const code = String(form.get("code") ?? "").trim().toLowerCase();
-  if (!code || !PILOT_CODES.includes(code))
-    return fail("That access code is not valid on this deployment. Codes are issued one per company, so a run cannot be started by anyone who finds the link.", 403);
+  if (!form) return fail("This endpoint takes a multipart form: files under `files` and optional pasted text under `text`.", 400);
 
   const uploads = form.getAll("files").filter((f): f is File =>
     typeof File !== "undefined" && f instanceof File && f.size > 0);
   const pasted = String(form.get("text") ?? "").trim();
-  void 0;
+  /* A run started from one of the four examples sends its own title, so the row on screen reads
+     "a purchase order · our sample" rather than "pasted document" — the visitor should never have to
+     remember which box the text came from. */
+  const pasteName = String(form.get("name") ?? "").trim();
 
   const picked: Picked[] = [];
   for (const f of uploads) picked.push(await readUpload(f, MAX_PILOT_BYTES));
-  if (pasted) picked.push(fromPaste(pasted));
+  if (pasted) picked.push(fromPaste(pasted, pasteName || "pasted document"));
 
   if (!picked.length) return fail("Nothing arrived. Drop a PDF, a text file, or paste the body of an order.", 400);
   if (picked.length > MAX_PILOT_DOCS)
@@ -118,9 +122,7 @@ export async function POST(req: Request) {
       const t0 = Date.now();
 
       try {
-        emit({ t: "start", engine: LIVE_ENABLED ? "model+rules" : "rules",
-          model: LIVE_ENABLED ? MODEL : null,
-          billed: LIVE_ENABLED ? PILOT_MODEL_BILLED : null,
+        emit({ t: "start", engine: "rules", model: null, billed: null,
           docs: picked.map((p, i) => ({ id: i, name: p.name, bytes: p.bytes, kind: p.kind })) });
 
         // One wire per request, thrown away when the response ends. That is the whole storage design:
@@ -158,28 +160,12 @@ export async function POST(req: Request) {
           emit({ t: "stage", i, stage: "classify", ms: rulesMs,
             detail: `${DOC_TYPES[fx.type]?.label ?? fx.type} at ${Math.round((fx.extraction?.typeConfidence ?? 0) * 100)}%` });
 
-          let out = fx;
-          let eng: "rules" | "live" = "rules";
-          let note: string | undefined;
-
-          if (LIVE_ENABLED) {
-            const doc: Doc = { id, from: p.name, subject: p.name, receivedAt: new Date().toISOString(),
-              body: p.text, type: "unclassified" };
-            const tm = Date.now();
-            try {
-              out = await runLive(doc);
-              eng = "live";
-              emit({ t: "stage", id, stage: "extract", ms: Date.now() - tm,
-                detail: `model answered · ${Object.values(out.extraction?.values ?? {}).filter(Boolean).length} fields` });
-            } catch (e) {
-              note = `model call failed (${(e as Error).message.slice(0, 70)}) — the rules result below is still gated the same way`;
-              emit({ t: "stage", i, stage: "extract", ms: 0, detail: note, bad: true });
-            }
-          } else {
-            const found = Object.values(out.extraction?.values ?? {}).filter(v => !!v).length;
-            emit({ t: "stage", i, stage: "extract", ms: rulesMs,
-              detail: `${found} fields read by the rules engine · no model call made` });
-          }
+          const out = fx;
+          const eng: "rules" = "rules";
+          const note: string | undefined = undefined;
+          const found = Object.values(out.extraction?.values ?? {}).filter(v => !!v).length;
+          emit({ t: "stage", i, stage: "extract", ms: rulesMs,
+            detail: `${found} fields read by the rules engine · no model call made` });
 
           emit({ t: "stage", i, stage: "gates", ms: 0,
             detail: out.relevant
@@ -198,7 +184,7 @@ export async function POST(req: Request) {
           if (note) notes[id] = note;
 
           const s1 = rebuild(w);
-          emit({ t: "doc", i, id, name: p.name, verdict: shape(p, out, s1, id, notes[id]), store: s1 });
+          emit({ t: "doc", i, id, name: p.name, verdict: shape(p, out, s1, id, notes[id], p.text), store: s1 });
           emit({ t: "stage", i, stage: "route", ms: Date.now() - tRun,
             // Same ending on every row, because it is the same fact either way: this deployment has no
             // credentials for their ERP, so a cleared row is a body prepared, not a body posted.
@@ -222,6 +208,8 @@ export async function POST(req: Request) {
     headers: {
       "content-type": "application/x-ndjson; charset=utf-8",
       "cache-control": "no-store, max-age=0",
+      /* Named rather than generic, and phrased for the reader who is not a developer: this is the line
+         that tells a prospect their paperwork is not accumulating anywhere. */
       "x-conduit-stored": "no",
     },
   });

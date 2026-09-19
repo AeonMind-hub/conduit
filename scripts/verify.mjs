@@ -2,26 +2,28 @@
 /**
  * verify.mjs — check the SHIPPED artifact, not the source you hope it came from.
  *
- * Why this exists: the whole sales pitch of this demo is "look, it is already running when
- * you arrive". That claim is invisible to a typecheck and to a unit test over the fixture
- * module. It only shows up as bytes served to a cookie-less stranger. So this boots the
- * build and asks exactly one question in several forms: does a cold visitor ever see a zero?
+ * Why this exists: the whole claim of this product is "paste your paperwork, see it done in seconds, on
+ * a page that keeps nothing". None of that is visible to a typecheck. It is only visible in the bytes a
+ * cookie-less stranger gets back and in the JSON the endpoint streams for their own documents. So this
+ * boots the build and asks that question in several forms.
  *
- *   npm run typecheck && npm run build && npm run verify
+ * Every claim the product makes in prose has an assertion here or in `engine-check.ts`. When copy adds a
+ * claim, this file has to grow — that is the rule, and it is why the last two lines of section 7 read the
+ * README rather than trusting whoever wrote it.
+ *
+ *   npm run build && npm run verify
  */
 import { spawn } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { mkPdf } from "./pdf-fixture.mjs";
 
 const PORT = 4300 + (process.pid % 1600);
-/** The pilot room is shut unless a code exists, so the suite configures one for its own server and
- *  asserts both halves: that a run works with it, and that nothing at all works without one. */
-const PILOT_CODE = "verify-northwind";
 const BASE = `http://127.0.0.1:${PORT}`;
 const fails = [];
 const ok = [];
 
 function check(name, cond, detail = "") {
-  (cond ? ok : fails).push(cond ? `${name}${detail ? ` — ${detail}` : ""}` : `${name}${detail ? ` — ${detail}` : ""}`);
+  (cond ? ok : fails).push(`${cond ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
 if (!existsSync(".next/BUILD_ID")) {
@@ -29,11 +31,22 @@ if (!existsSync(".next/BUILD_ID")) {
   process.exit(1);
 }
 
-/* One process, not `npx next`: a wrapper means the kill at the end of this file signals `npx` and
- * leaves `next start` running, and every later run then verifies a build that no longer exists. The
- * suite that cannot tell which server it is talking to is not a suite. */
+/* The four examples are the product's promise, and they live in TypeScript. Load the same module the
+   page loads rather than copying its strings into this file, or the suite grades a copy of a promise
+   instead of the promise. */
+let SAMPLES;
+try {
+  ({ SAMPLES } = await import("../src/lib/samples.ts"));
+} catch {
+  /* tsx is not resolvable from here — run `npm run verify`, which loads this file through it. */
+  console.error("verify.mjs must run under tsx (`npm run verify`) because it imports src/lib/samples.ts.");
+  process.exit(1);
+}
+
+/* One process, not `npx next`: a wrapper means the kill at the end signals `npx` and leaves `next start`
+   running, and every later run then verifies a build that no longer exists. */
 const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], {
-  env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", OFFLINE_DEMO: "1", PILOT_CODES: PILOT_CODE },
+  env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", OFFLINE_DEMO: "1" },
   stdio: ["ignore", "pipe", "pipe"],
   detached: true,
 });
@@ -51,376 +64,316 @@ async function waitReady(timeoutMs = 60_000) {
   return false;
 }
 
-/* React splits adjacent text nodes with `<!-- -->`, so "$43,175" ships as
-   `$<!-- -->43,175`. Any assertion written against the literal string fails on a
-   page that is perfectly correct. Strip the markers before matching. */
+/* React splits adjacent text nodes with `<!-- -->`, and escapes quotes in `<pre>`. Both make an assertion
+   written against the literal source string fail on a page that is perfectly correct. */
 const tidy = h => h.replace(/<!--[\s\S]*?-->/g, "");
+const visible = h => tidy(h).replace(/<script[\s\S]*?<\/script>/g, "").replace(/<style[\s\S]*?<\/style>/g, "");
 
-/** Thirteen small files: over the per-run document bound, nowhere near the platform's body limit,
- *  so a 413 here can only have come from the product's own cap rather than the host's. */
-const pad = k => ("PO Number: 9" + (1000 + k) + "\nQuantity: 10 units\nSupplier: Someone Ltd\n").repeat(900);
-
-const get = async (path, headers = {}) => {
-  const r = await fetch(BASE + path, { headers, redirect: "manual" });
-  return { status: r.status, html: tidy(await r.text()), cookie: r.headers.getSetCookie?.() ?? [] };
+const get = async (path) => {
+  const r = await fetch(BASE + path, { redirect: "manual" });
+  const text = await r.text();
+  return { status: r.status, html: tidy(text), raw: text, visible: visible(text),
+    headers: Object.fromEntries(r.headers.entries()), cookie: r.headers.getSetCookie?.() ?? [] };
 };
+const post = async (form) => {
+  const r = await fetch(`${BASE}/api/pilot`, { method: "POST", body: form });
+  const text = await r.text();
+  const events = text.split("\n").filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return { t: "unparsable", raw: l }; } });
+  return { status: r.status, headers: Object.fromEntries(r.headers.entries()), events, text };
+};
+const byName = (evs, name) => evs.filter(e => e.t === "doc" && e.name === name).map(e => e.verdict)[0];
 
 try {
   if (!await waitReady()) throw new Error(`server never came up:\n${out.slice(-1500)}`);
 
-  // ── 0. the port must be ours, or every assertion below proves nothing ──────
+  // ── 0. the server being graded must be this build ────────────────────────────
   /*  A leftover `next start` from an earlier run answers on a reused port, and the suite then grades a
-      build that no longer exists — which is exactly how one run here reported a string that had been
-      deleted from the source. So an occupied port is a hard failure, not a shortcut. */
-  {
-    /* Every port in this sandbox looks "bound" to a probe, so ownership is proved by identity instead:
-       the build id Next writes into the page must equal the build id on disk. That is the difference
-       between testing this change and silently grading whatever `next start` survived from an earlier
-       run — which already produced one impossible result in this repo's history. */
-    const built = readFileSync(".next/BUILD_ID", "utf8").trim();
-    const page = await get("/");
-    check("the server answering this suite is the build on disk", page.html.includes(built),
-      `disk ${built}; page ${page.html.includes(built) ? "matches" : "does not contain it — stale server, kill it and re-run"}`);
-    if (!page.html.includes(built)) throw new Error(`the answer on ${BASE} is not this build (${built})`);
-  }
-
-  // ── 1. a cold visitor with no cookie must land on a FINISHED run ───────────
+      build that no longer exists — which already produced one impossible result in this repo's history.
+      Ownership is therefore proved by identity: the build id Next writes into the page equals the one on
+      disk. */
   const root = await get("/");
+  {
+    const built = readFileSync(".next/BUILD_ID", "utf8").trim();
+    check("the server answering this suite is the build on disk", root.html.includes(built),
+      `build id ${built} is not in the served HTML — an older next start is holding the port`);
+  }
+
+  // ── 1. the landing page IS the machine ───────────────────────────────────────
   check("GET / is 200", root.status === 200, `status ${root.status}`);
-  /* Copy assertions run on the tag-stripped text. The interface is typeset now — an italic inside
-     a headline is a design decision, and it must not be able to break a claim by inserting markup
-     mid-sentence. DOM assertions below still look at raw HTML, where the element is the claim. */
-  const txt = root.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-  check("cold visit shows 66 committed", />\s*66\s*</.test(root.html) || root.html.includes("66 committed"));
-  check("cold visit shows both denominators",
-    root.html.includes("88%") && root.html.includes("96%"),
-    `88%:${root.html.includes("88%")} 96%:${root.html.includes("96%")}`);
-  /* The disclosure stays, but it is the size of a product label, not the size of a warning.
-     "Sample corpus" is what every enterprise demo says; "not a client deployment" is what an
-     anxious one says. Same fact, one of them belongs in the chrome. */
-  check("sample data is disclosed where a reader looks, and nowhere as a warning",
-    (root.html.match(/Sample corpus/g) || []).length >= 1
-      && !/not a client deployment/.test(root.html));
-  check("the product never argues with itself",
-    !/demo corpus/.test(root.html) && !/not a client deployment/.test(root.html)
-      && !/synthetic/.test(root.html),
-    "README carries the disclosure, the UI does not apologise");
-  check("event stream explains itself instead of a bare 0", root.html.includes("empty until replay"));
-  check("cold visit shows NO idle zeros", !/Pipeline[\s\S]{0,400}?>\s*0\s*</.test(root.html));
-  check("there is no play button on a running system", !/Run pipeline/.test(root.html));
-  check("the first thing a prospect is invited to do is send it their work",
-    root.html.includes("Send it a document") && root.html.includes('id="intake"'));
-  check("the landing face carries the claim, not a feature list",
-    /Documents arrive/.test(txt) && /Rows appear in your systems\./.test(txt));
-  check("the hero states what happens to unverifiable documents",
-    /goes to a human/.test(txt) && /it is held, never guessed/.test(txt));
-  check("hero and console are one page, linked", root.html.includes('href="#console"'));
-  /* The pulsing dot is the app's only "something is happening right now" signal, so it must
-     appear during a run and never otherwise — not in the rail beside an unconnected mailbox, not
-     on the landing face. Checked on a cold visit, where nothing is in flight. */
-  check("a cold visit shows no live-traffic indicator anywhere", !/live-dot on/.test(root.html));
-  check("the landing face does not sell with adjectives",
-    !/revolutionary|game[- ]changing|cutting[- ]edge|AI-powered|leverage|seamless|unlock/i.test(root.html));
-  check("it reads as a product, not a demo", root.html.includes("Inbound document automation"));
+  check("the page is an input before it is a pitch",
+    /<textarea/.test(root.html) && root.visible.indexOf("Paste a document.") < root.visible.indexOf("No document of yours"),
+    `textarea ${/textarea/.test(root.html)}`);
+  check("there is exactly one input on the page", (root.html.match(/<textarea/g) || []).length === 1);
+  check("the headline is the promise, in two lines",
+    /Paste a document\./.test(root.visible) && /Get a clean row\./.test(root.visible));
+  check("the sub-headline says what happens to unverifiable documents",
+    /holds and tells you why, instead of writing a guess/.test(root.visible.replace(/\s+/g, " ")));
+  check("the run button is a verb, not a tour", /Run it/.test(root.visible) && /or choose a file/.test(root.visible));
+  check("a file can be chosen, and the accepted types are named",
+    /type="file"/.test(root.html) && /accept="\.pdf,\.txt/.test(root.html));
+  check("a phone is not told to press a keyboard shortcut",
+    /class="hidden sm:inline">⌘↵ to run/.test(root.html), "the ⌘↵ hint is desktop-only");
+  check("the run button works before anything is typed (a phone taps first, then reads)",
+    /<button[^>]*class="btn btn-primary[^"]*"[^>]*>Run it<\/button>/.test(root.html),
+    "an empty click explains itself instead of the control sitting dead");
+  check("the page states what happens to what you paste",
+    /nothing stored, nothing sent on/i.test(root.visible.replace(/\s+/g, " ")));
+  check("the four examples are disclosed as ours, once",
+    (root.visible.match(/test documents/gi) || []).length === 1 && /not a client/.test(root.visible));
+  check("four sample chips are offered, with a promise each",
+    SAMPLES.every(s => root.visible.includes(s.label)) &&
+    SAMPLES.every(s => root.visible.includes(s.promise)),
+    SAMPLES.map(s => s.label).join(" / "));
+  check("every chip is addressable by the tests", SAMPLES.every(s => root.html.includes(`data-sample="${s.key}"`)));
+  check("the page says how many documents a run takes", /up to 12 at once/.test(root.visible));
+  check("no access code, no sign-up, nothing to fill in first",
+    !/access code|sign up|sign in|your email|get a key/i.test(root.visible), "the public path is open");
+  check("the product is not shown with a price list",
+    !/\$\s?\d|\bper month\b|\bpricing\b|\bfrom \$\d/i.test(root.visible), "pricing lives in the README and the message, not on screen");
+  check("no stats theatre on the landing page",
+    !/88%|96%|75 documents|66 committed/i.test(root.visible), "corpus numbers are not the first screen any more");
+  check("no numbered tour of itself", !/how it works|what it does|overview|features/i.test(root.visible.toLowerCase()));
+  check("it does not advertise itself with adjectives",
+    !/seamless|powerful|cutting-edge|revolutionary|AI-powered|streamline/i.test(root.visible));
+  check("the old console is gone from the page",
+    !/Run pipeline|empty until replay|Export CSV|pilot room|Event log|Pipeline/i.test(root.visible));
+  check("the frame carries one way deeper", /href="\/systems"/.test(root.html) && /how it writes/.test(root.visible));
+  check("the footer says where documents arrive in production", /ops@northwind\.example/.test(root.visible));
+  check("nothing is written into a cookie on the way out", root.cookie.length === 0,
+    root.cookie.map(c => c.split("=")[0]).join(",") || "no Set-Cookie");
+  check("the served document carries no session state to clear", !/conduit_s=/.test(root.raw));
 
-  // ── 1b. the Record frame: a bound document, not a dashboard ────────────────
-  check("the page is framed like a document (masthead, main, footer)",
-    /class="mast/.test(root.html) && root.html.includes("<main") && root.html.includes("back to the run"));
-  check("the table of contents reaches every section of the product",
-    (root.html.match(/class="toclink/g) || []).length === 5,
-    `${(root.html.match(/class="toclink/g) || []).length} links`);
-  check("the new theme actually shipped, rather than the dark one underneath it",
-    root.html.includes('data-theme="record"'));
-  /* Typography is the product's voice here. If the fonts came from a CDN, the page would render in
-     a fallback for a second on slow warehouse wifi — which is the exact moment a prospect decides
-     whether this looks like something they would pay for. */
-  check("type is first-party: self-hosted woff2, no font CDN in the document",
-    root.html.includes("/_next/static/media/") && !/fonts\.(googleapis|gstatic)\.com/.test(root.html));
-  check("the sheet is numbered where a reader can quote it back",
-    /class="sect-no">01</.test(root.html) && /class="sect-no">03</.test(root.html));
-  /* The console used to say "watching intake" while nothing was connected. A label claiming an
-     input the deployment does not have is worse than an empty one. */
-  check("no screen claims to be watching a mailbox", !/watching intake/i.test(root.html));
-  // A duplicated stat grid shipped once and was visible on every visit. Never again, by test.
-  check("the counts are printed once", (root.html.match(/>Processed</g) || []).length === 1);
-  /* The fill bar means something specific now: ink = walked through, amber = a gate cut, green =
-     the write. One green bar per sheet, or green stops meaning anything. */
-  check("exactly one write-meter on the console sheet",
-    (root.html.match(/meter mt-2[^"]*write/g) || []).length === 1,
-    `${(root.html.match(/meter mt-2[^"]*write/g) || []).length} found`);
+  // ── 2. a real run, over HTTP, through the shipped endpoint ───────────────────
+  const PO = SAMPLES.find(s => s.key === "po").body;
+  const INV = SAMPLES.find(s => s.key === "invoice-no-po").body;
+  const BK = SAMPLES.find(s => s.key === "booking").body;
+  const NL = SAMPLES.find(s => s.key === "newsletter").body;
+  const pdfLines = PO.split("\n");
+  const dupPdf = mkPdf(pdfLines);            // the same paperwork, second filename
+  const editedPdf = mkPdf([...pdfLines, "Note: quantity revised to 4,100"]); // different text
 
-  // ── 2. the money page must never print a $0 headline ───────────────────────
-  const an = await get("/analytics");
-  check("GET /analytics is 200", an.status === 200, `status ${an.status}`);
-  check("analytics money line has a real number, not $0",
-    /Cost of doing this by hand today[\s\S]{0,600}?\$\d{2,}/.test(an.html) && !an.html.includes("$0 a year"));
-  check("analytics carries a projection", an.html.includes("a year") && an.html.includes("projected at"));
-  check("analytics states the assumptions", an.html.includes("Projection only"));
-  check("no price is printed inside the product",
-    !an.html.includes("Pilot build") && !an.html.includes("Keeping it running") && !an.html.includes("/mo"),
-    "a price in the app reads as a listing; in a proposal it reads as a quote");
-  check("analytics ends on an acceptance test, not a discount", an.html.includes("How this gets verified"));
+  const run1 = await post(await (async () => {
+    const f = new FormData();
+    f.append("text", PO); f.append("name", "a purchase order · our sample");
+    f.append("files", new Blob([INV], { type: "text/plain" }), "invoice-no-po.txt");
+    f.append("files", new Blob([BK], { type: "text/plain" }), "booking.txt");
+    f.append("files", new Blob([NL], { type: "text/plain" }), "newsletter.txt");
+    f.append("files", new Blob([mkPdf(pdfLines)], { type: "application/pdf" }), "northgate-po.pdf");
+    f.append("files", new Blob([dupPdf], { type: "application/pdf" }), "northgate-po (1).pdf");
+    f.append("files", new Blob([editedPdf], { type: "application/pdf" }), "northgate-po-revised.pdf");
+    f.append("files", new Blob(["not a pdf, just bytes with a .pdf name"], { type: "application/pdf" }), "broken.pdf");
+    f.append("files", new Blob([mkPdf([])], { type: "application/pdf" }), "scan-of-an-invoice.pdf");
+    f.append("files", new Blob(["call me about the bolts"], { type: "text/plain" }), "scrap.txt");
+    f.append("files", new Blob(["x".repeat(300)], { type: "application/msword" }), "order.docx");
+    return f;
+  })());
 
-  // ── 3. the other tabs must render, not error ───────────────────────────────
-  // the integrations screen is the one that makes it look worth thousands
-  const cx = await get("/connections");
-  check("GET /connections is 200", cx.status === 200, `status ${cx.status}`);
-  check("connections names their systems", /NetSuite|Xero|SAP Business One|HubSpot/.test(cx.html));
-  check("connections shows a real payload, not a screenshot", cx.html.includes("idempotency_key"));
-  check("connections shows the field map", cx.html.includes("Field map") && cx.html.includes("mapping live"));
-  check("connections states what a build still has to add", /Real writes\./.test(cx.html));
-
-  for (const p of ["/records", "/exceptions"]) {
-    const r = await get(p);
-    check(`GET ${p} is 200`, r.status === 200, `status ${r.status}`);
-  }
-
-  // ── 4. pasted documents: honest in offline mode, never silently committed ─
-  const short = await fetch(`${BASE}/api/live`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text: "too short" }),
-  });
-  check("tiny paste is rejected with a usable message",
-    short.status === 400 && (await short.json()).error?.length > 10);
-
-  const po = [
-    "Please confirm receipt of the following order.",
-    "PO Number: 90210", "SKU: NW-7788-GRY", "Quantity: 120 units",
-    "Unit price: $41.00", "Required by: 10/02/2026",
-    "Ship to: Riverside DC, 40 Dock Road, Liverpool L3 4BQ",
-  ].join("\n");
-  const live = await fetch(`${BASE}/api/live`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ from: "buyers@riverside.example", subject: "PO 90210", text: po }),
-  });
-  const lj = await live.json();
-  check("paste returns a store", live.status === 200 && !!lj.store);
-  const held = lj.store?.processed?.[lj.docId];
-  check("offline paste is HELD, never committed",
-    held && held.status === "exception" && held.flags?.includes("ENGINE_UNAVAILABLE"),
-    `status=${held?.status} flags=${held?.flags}`);
-  check("visitor cookie stays inside the 4KB domain limit",
-    lj.cookieLen < 4096, `${lj.cookieLen} bytes`);
-  const setc = (live.headers.getSetCookie?.() ?? []).join(";");
-  check("cookie is actually set", setc.includes("conduit_s="));
-
-  // replay after Clear must still work (idempotency of the wire form)
-  const cleared = await fetch(`${BASE}/api/reset`, { method: "POST" });
-  const cj = await cleared.json();
-  check("clear empties the store", cj.store?.stats?.total === 0 && cj.store?.records?.length === 0);
-  const after = await get("/", { cookie: "conduit_s=eyJEiOiJ9" });
-  check("a returning visitor still gets the same chrome (nothing invented per session)",
-    after.status === 200 && /Sample corpus/.test(after.html));
-  check("records page can hand over the rows", (await get("/records")).html.includes("Export CSV ("));
-
-  // ── 6. the held queue is a real workflow, not a picture of one ─────────────
-  // This is the moment a prospect judges: click Approve on a held document, reload, and the
-  // decision must still be there WITH THE VALUE THEY TYPED. There was no PATCH handler on this
-  // route when the first version shipped, so the demo's best screen 405'd in production.
-  const cold = await fetch(`${BASE}/api/records`);
-  const store0 = await cold.json();
-  const heldDoc = Object.values(store0.processed).find(p => p.status === "exception" && p.type !== "unclassified");
-  check("a cold visit has something in the held queue", !!heldDoc, heldDoc ? `${held.type} ${heldDoc.flags}` : "nothing held");
-  if (heldDoc) {
-    const key = Object.keys(heldDoc.extraction?.values ?? {})[0];
-    const patched = await fetch(`${BASE}/api/records`, {
-      method: "PATCH", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ docId: heldDoc.doc.id, action: "approve", correctedFields: [key],
-                             extraction: { values: { ...heldDoc.extraction.values, [key]: "VERIFY-SENTINEL-99" } } }),
-    });
-    const pj = await patched.json();
-    const after1 = pj.store?.processed?.[heldDoc.doc.id];
-    check("PATCH approve commits the held document", patched.status === 200 && after1?.status === "committed",
-      `http ${patched.status} → ${after1?.status}`);
-    check("the approval is written to the visitor cookie", (patched.headers.getSetCookie?.() ?? []).join("").includes("conduit_s="));
-    const rec = (pj.store?.records ?? []).find(r => r.sourceDocId === heldDoc.doc.id);
-    check("the human's corrected value is what got written", rec?.cells?.[key] === "VERIFY-SENTINEL-99",
-      `cells.${key}=${rec?.cells?.[key]}`);
-    check("and the audit trail still says a person fixed that field", (rec?.correctedFields ?? []).includes(key),
-      `correctedFields=${rec?.correctedFields}`);
-
-    const jar = (patched.headers.getSetCookie?.() ?? []).map(c => c.split(";")[0]).join("; ");
-    const reloaded = await get("/", { cookie: jar });
-    check("the visitor's own cookie survives the reload", reloaded.status === 200);
-    const st2 = await (await fetch(`${BASE}/api/records`, { headers: { cookie: jar } })).json();
-    check("their approval survives the reload", st2.processed?.[heldDoc.doc.id]?.status === "committed",
-      `after reload: ${st2.processed?.[heldDoc.doc.id]?.status}`);
-    const rejected = await fetch(`${BASE}/api/records`, {
-      method: "PATCH", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ docId: heldDoc.doc.id }),
-    });
-    check("a malformed approve is refused, not half-applied", rejected.status === 400);
-  }
-
+  check("a mixed batch of eleven documents is accepted", run1.status === 200, `status ${run1.status}`);
+  check("the answer streams as newline-delimited JSON",
+    (run1.headers["content-type"] ?? "").includes("ndjson") && run1.events.length > 4,
+    `${run1.events.length} events`);
+  check("the endpoint declares that it stored nothing", run1.headers["x-conduit-stored"] === "no");
+  check("the run names the engine it used, and it is not a model",
+    run1.events[0]?.t === "start" && run1.events[0].engine === "rules" && run1.events[0].model === null
+      && run1.events[0].billed === null);
+  check("a clean purchase order commits, with a payload",
+    byName(run1.events, "a purchase order · our sample")?.status === "committed"
+      && !!byName(run1.events, "a purchase order · our sample")?.payload?.idempotency_key,
+    JSON.stringify(byName(run1.events, "a purchase order · our sample")?.payload?.external_id ?? null));
+  check("an invoice with no PO reference is held with the code that stopped it",
+    byName(run1.events, "invoice-no-po.txt")?.status === "exception"
+      && byName(run1.events, "invoice-no-po.txt")?.flags.includes("MISSING_PO_REF"));
+  check("a held document is shown without a body, because there is none",
+    byName(run1.events, "invoice-no-po.txt")?.payload === null);
+  check("a delivery booking goes to the warehouse system, not to finance",
+    byName(run1.events, "booking.txt")?.status === "committed"
+      && /warehouse|WMS/i.test(byName(run1.events, "booking.txt")?.destination ?? ""));
+  check("a newsletter is set aside rather than queued for a person",
+    byName(run1.events, "newsletter.txt")?.status === "discarded");
+  check("the refusal explains itself in the reader's words, not in a code",
+    typeof byName(run1.events, "newsletter.txt")?.reject === "string"
+      && /NO_TRANSACTIONAL_CONTENT/.test(byName(run1.events, "newsletter.txt")?.reject ?? ""),
+    byName(run1.events, "newsletter.txt")?.reject ?? "nothing");
+  check("a discarded document is not dressed up as a hold",
+    (byName(run1.events, "newsletter.txt")?.fields ?? []).length === 0);
+  check("a PDF with a text layer is read the same as pasted text",
+    byName(run1.events, "northgate-po.pdf")?.status === "committed"
+      && byName(run1.events, "northgate-po.pdf")?.payload?.external_id === "88241");
+  /* This one is the claim the whole idempotency paragraph rests on: the same paperwork arriving twice,
+     under two filenames, has to come back with one key. */
   {
-    const { mkPdf, PO_LINES, PO_TWO_LINE_LINES, BLANK_PDF_LINES, INVOICE_GOOD, INVOICE_NO_PO_REF } =
-      await import("./pdf-fixture.mjs");
+    const a = byName(run1.events, "northgate-po.pdf")?.payload?.idempotency_key;
+    const b = byName(run1.events, "northgate-po (1).pdf")?.payload?.idempotency_key;
+    const c = byName(run1.events, "northgate-po-revised.pdf")?.payload?.idempotency_key;
+    check("the same document sent twice under two names is one order", !!a && a === b, `${a} vs ${b}`);
+    check("the same order with different text is a different order", !!c && c !== a, `${a} vs ${c}`);
+    check("the key is the customer's own reference, not our row number",
+      byName(run1.events, "northgate-po.pdf")?.payload?.external_id === "88241",
+      String(byName(run1.events, "northgate-po.pdf")?.payload?.external_id));
+    check("the payload carries provenance, so a row can be audited back to a document",
+      byName(run1.events, "northgate-po.pdf")?.payload?.provenance?.engine === "rules"
+        || !!byName(run1.events, "northgate-po.pdf")?.payload?.provenance);
+  }
+  {
+    const v = byName(run1.events, "a purchase order · our sample")?.fields ?? [];
+    check("every field printed on a cleared row is above the write threshold",
+      v.length > 0 && v.filter(f => f.value).every(f => f.confidence >= 0.85),
+      v.map(f => `${f.key}:${f.confidence}`).join(" "));
+    check("confidence is printed as the engine floored it, never rounded up",
+      v.every(f => f.confidence === 0 || Math.round(f.confidence * 100) === f.confidence * 100));
+    const held = byName(run1.events, "invoice-no-po.txt")?.fields ?? [];
+    check("a field the document never stated is reported absent, not filled in",
+      held.some(f => !f.value && /not present in the document/i.test(f.reason ?? "")),
+      held.filter(f => !f.value).map(f => f.key).join(","));
+  }
+  check("a run reports its own elapsed time, and does not pad it",
+    run1.events.at(-1)?.t === "done" && Number(run1.events.at(-1).ms) < 30_000,
+    `${run1.events.at(-1)?.ms} ms`);
+  check("an unreadable file is an outcome, not a 500",
+    ["broken.pdf", "scan-of-an-invoice.pdf", "scrap.txt"].every(n => {
+      const v = byName(run1.events, n);
+      return v && (v.flags || []).includes("UNREADABLE");
+    }), ["broken.pdf", "scan-of-an-invoice.pdf", "scrap.txt"].map(n => byName(run1.events, n)?.flags?.join("/")).join(" "));
+  check("a scan is refused in words about OCR, not about our stack",
+    /scan|OCR/i.test(byName(run1.events, "scan-of-an-invoice.pdf")?.note ?? ""),
+    (byName(run1.events, "scan-of-an-invoice.pdf")?.note ?? "").slice(0, 60));
+  check("a Word file is refused as a missing capability, not as an empty document",
+    /docx|Word|read yet/i.test(byName(run1.events, "order.docx")?.note ?? ""),
+    (byName(run1.events, "order.docx")?.note ?? "").slice(0, 70));
+  check("no run left anything to read back on a second request",
+    (await get("/")).cookie.length === 0);
 
-    /* One upload, one paste, one scan, one two-line order, one invoice with no reference: five
-     * documents and three different outcomes, which is the whole product in one batch. */
-    const form = new FormData();
-    form.append("code", PILOT_CODE);
-    form.append("files", new Blob([mkPdf(PO_LINES)], { type: "application/pdf" }), "northgate-po.pdf");
-    form.append("files", new Blob([mkPdf(PO_TWO_LINE_LINES)], { type: "application/pdf" }), "two-line-order.pdf");
-    form.append("files", new Blob([mkPdf(BLANK_PDF_LINES)], { type: "application/pdf" }), "scan-of-an-invoice.pdf");
-    form.append("files", new Blob([INVOICE_GOOD.join("\n")], { type: "text/plain" }), "invoice.txt");
-    form.append("text", INVOICE_NO_PO_REF.join("\n"));
-    const t0 = Date.now();
-    const res = await fetch(`${BASE}/api/pilot`, { method: "POST", body: form });
-    check("the pilot room answers a code-carrying run", res.status === 200, `HTTP ${res.status}`);
-    check("a pilot run streams events rather than waiting to be finished",
-      (res.headers.get("content-type") ?? "").includes("x-ndjson"));
-    // The "we keep nothing" line is only true if no state comes back with the run.
-    check("a pilot run sets no cookie, so nothing follows the visitor anywhere",
-      (res.headers.getSetCookie?.() ?? []).length === 0,
-      (res.headers.getSetCookie?.() ?? []).join(",").slice(0, 40));
-
-    const text = await res.text();
-    const ev = text.split("\n").filter(Boolean).map(l => JSON.parse(l));
-    const stages = ev.filter(e => e.t === "stage");
-    const docs = ev.filter(e => e.t === "doc");
-    const done = ev.find(e => e.t === "done");
-    const start = ev.find(e => e.t === "start");
-    const ORDER = ["receive", "text", "classify", "extract", "gates", "route"];
-    const mine = k => stages.filter(st => st.i === k).map(st => st.stage);
-
-    check("the run says which engine did the work", start?.engine === "rules", `engine=${start?.engine}`);
-    check("five documents arrive and five documents are answered", docs.length === 5, `docs=${docs.length}`);
-    check("every readable document is walked through the six stages in order",
-      [0, 1, 3, 4].every(k => mine(k).join(",") === ORDER.join(",")), JSON.stringify(mine(0)));
-    check("a file with nothing readable in it stops after the text step, and says so",
-      mine(2).join(",") === "receive,text", JSON.stringify(mine(2)));
-    check("the PDF's text layer was read by the server, not assumed",
-      stages.some(st => st.stage === "text" && /pdf text layer/.test(st.detail ?? "")),
-      stages.filter(st => st.stage === "text").map(st => st.detail).join(" | ").slice(0, 70));
-    check("pasted text goes through the same intake as a file, so the two cannot disagree",
-      stages.some(st => st.i === 4 && st.stage === "text" && /pasted/.test(st.detail ?? "")),
-      stages.filter(st => st.i === 4 && st.stage === "text").map(st => st.detail).join(""));
-    check("a scan is held with its reason, never filled in",
-      docs.some(d => d.verdict?.status === "exception" && /OCR|text layer/i.test(d.verdict.note ?? "")),
-      docs.map(d => d.verdict?.note).join(" | ").slice(0, 90));
-
-    const clean = docs.find(d => d.verdict?.status === "committed");
-    check("a complete order clears every gate and comes back with a body prepared", !!clean,
-      docs.map(d => `${d.verdict?.status}:${(d.verdict?.flags ?? []).join("+")}`).join(" | "));
-    check("the quantity is read whole — 4,000, never a truncated 400 or 120",
-      clean?.verdict?.fields?.some(f => f.key === "quantity" && f.value === "4000"),
-      JSON.stringify(clean?.verdict?.fields?.map(f => [f.key, f.value]) ?? []).slice(0, 160));
-    check("every field on screen carries a confidence, and anything under 90% carries a reason",
-      (clean?.verdict?.fields ?? []).every(f => typeof f.confidence === "number" &&
-        (f.confidence >= 0.9 || f.value === "" || !!f.reason)));
-    check("the name on the row is the name the document actually printed",
-      clean?.verdict?.fields?.some(f => f.key === "customer" && /NORTHGATE/.test(f.value)),
-      JSON.stringify(clean?.verdict?.fields?.find(f => f.key === "customer")?.value ?? ""));
-
-    const twoline = docs.find(d => (d.verdict?.flags ?? []).some(f => /SKU/.test(f)));
-    check("a two-line order is held instead of one line being guessed at", !!twoline,
-      docs.map(d => (d.verdict?.flags ?? []).join("+")).join(" | "));
-    check("and the reason says the thing a buyer needs to hear: one row per write is a build decision",
-      /line|row/i.test(twoline?.verdict?.fields?.find(f => f.key === "sku")?.reason ?? ""),
-      twoline?.verdict?.fields?.find(f => f.key === "sku")?.reason?.slice(0, 80) ?? "no reason given");
-
-    const heldInvoice = docs.find(d => d.verdict?.flags?.includes("MISSING_PO_REF"));
-    check("an invoice with no PO reference is stopped, and no body is prepared for it",
-      heldInvoice?.verdict?.status === "exception" && heldInvoice?.verdict?.payload === null);
-    // Four of the five reached routing; the scan never did, so it never gets a routing line either —
-    // a stage list that pads itself out for a document that stopped early would be theatre.
-    check("nothing on the page is allowed to read as a write: every row closes the same way",
-      stages.filter(st => st.stage === "route").length === 4 &&
-      stages.filter(st => st.stage === "route").every(st => /nothing was written/.test(st.detail ?? "")),
-      stages.filter(st => st.stage === "route").map(st => st.detail).join(" | ").slice(0, 90));
-
-    check("the batch finishes well inside the platform's 60s ceiling",
-      Date.now() - t0 < 15_000, `${Date.now() - t0} ms for 5 documents`);
-    check("the totals describe this batch and nothing else", done?.store?.stats?.total === 5,
-      `total=${done?.store?.stats?.total}`);
-    check("no model call is claimed where none was made, and nothing is claimed as stored",
-      done?.store?.stats?.liveCalls === 0 && done?.stored === false);
-    const prepared = docs.flatMap(d => d.verdict?.payload ? [d.verdict.payload] : []);
-    check("each prepared body carries an idempotency key, so a re-run cannot double-post",
-      prepared.length >= 2 && prepared.every(p => /:/.test(String(p.idempotency_key ?? ""))),
-      `bodies=${prepared.length}`);
-    check("each body names the engine that produced it, because an audit trail has to",
-      prepared.every(p => p.provenance?.engine === "rules"),
-      JSON.stringify(prepared[0]?.provenance ?? {}).slice(0, 90));
-    check("a held document produces no body at all, rather than a partial one",
-      docs.filter(d => d.verdict?.status === "exception").every(d => d.verdict.payload === null));
-
-    // refusals, because an open upload endpoint is the thing this must never become
-    const wrong = await fetch(`${BASE}/api/pilot`, { method: "POST", body: new FormData() });
-    check("no code means no run", wrong.status === 403, `HTTP ${wrong.status}`);
-    const empty = await fetch(`${BASE}/api/pilot`, { method: "POST",
-      body: (() => { const f = new FormData(); f.append("code", PILOT_CODE); return f; })() });
-    check("an empty submission is answered, not crashed", empty.status === 400, `HTTP ${empty.status}`);
-    const big = new FormData();
-    big.append("code", PILOT_CODE);
-    for (let k = 0; k <= 12; k++)
-      big.append("files", new Blob([pad(k)], { type: "text/plain" }), `d${k}.txt`);
-    const flooded = await fetch(`${BASE}/api/pilot`, { method: "POST", body: big });
-    check("a run is bounded, so one click cannot become a bill", flooded.status === 413,
-      `HTTP ${flooded.status}`);
-    const oversize = await fetch(`${BASE}/api/pilot`, { method: "POST", body: (() => {
-      const f = new FormData(); f.append("code", PILOT_CODE);
-      f.append("files", new Blob(["x".repeat(1_600_000)], { type: "text/plain" }), "huge.txt");
-      return f; })() });
-    check("one enormous file is named and refused rather than silently dropped",
-      oversize.status === 200
-        ? (await oversize.text()).includes("caps one document at")
-        : oversize.status === 413, `HTTP ${oversize.status}`);
-
-    const html = (await get("/")).html;
-    check("the pilot room is on the page a buyer lands on", /Put your own paper through it/.test(html));
-    check("the page says out loud what the endpoint does not keep",
-      /no\s+database\s+behind\s+it/i.test(tidy(html)));
+  // ── 3. bounds: what makes an open endpoint safe ──────────────────────────────
+  {
+    const empty = await post(new FormData());
+    check("an empty form is refused with a usable sentence", empty.status === 400 && /Nothing arrived/.test(empty.text),
+      `${empty.status}`);
+    const jsonBody = await fetch(`${BASE}/api/pilot`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    check("a non-multipart request is told what the endpoint takes", jsonBody.status === 400
+      && /multipart/.test(await jsonBody.text()));
+    const many = new FormData();
+    for (let k = 0; k < 13; k++) many.append("files", new Blob([PO], { type: "text/plain" }), `d${k}.txt`);
+    const big13 = await post(many);
+    check("thirteen documents are refused by our bound, not the platform's",
+      big13.status === 413 && /12 documents/.test(big13.text), `${big13.status}`);
+    const huge = new FormData();
+    huge.append("files", new Blob(["x".repeat(1_600_000)], { type: "text/plain" }), "huge.txt");
+    const bigFile = await post(huge);
+    check("an oversized file comes back as a hold that quotes the cap",
+      bigFile.status === 200 && /1\.5 MB/.test(byName(bigFile.events, "huge.txt")?.note ?? ""),
+      (byName(bigFile.events, "huge.txt")?.note ?? "").slice(0, 40));
+    const tooLong = new FormData();
+    tooLong.append("text", ("PO Number: 55501\nQuantity: 2 units\nSupplier: Someone Ltd\n").repeat(900));
+    const cut = await post(tooLong);
+    check("a pasted novel is read to the cap and the run still finishes",
+      cut.status === 200 && cut.events.some(e => e.t === "done"),
+      `${(tooLong.get("text") ?? "").length} characters in`);
   }
 
-  // ── 4c. the palette the components name must exist in the shipped CSS ─────
+  // ── 4. /systems is generated from the same code, not from a slide ────────────
   {
-    /* Tailwind drops a utility that matches no token — silently, with no build error, on a page that
-       still photographs fine. Every muted caption and hairline in this app depends on those classes
-       being real, so the built stylesheet is asked, not the config file. */
-    const html = (await get("/")).html;
-    const href = /href="(\/[^"]+\.css)"/.exec(html)?.[1];
-    check("the page ships its own stylesheet", !!href, href ?? "no css link found");
-    if (href) {
-      const css = await fetch(BASE + href).then(r => r.text());
-      for (const cls of [".text-mute", ".text-ink2", ".bg-paper2", ".border-rule2", ".text-amber",
-        ".stamp", ".stamp-hold", ".meter"])
-        check(`the built stylesheet defines ${cls}`, css.includes(cls + "{"),
-          css.includes(cls + "{") ? "" : "class absent from the shipped CSS — the hierarchy would be inherited by accident");
+    const sys = await get("/systems");
+    check("GET /systems is 200", sys.status === 200, `status ${sys.status}`);
+    check("/systems opens on the write contract", /What it writes,/.test(sys.visible) && /and what stops it\./.test(sys.visible));
+    check("/systems prints a payload, not a picture of one",
+      /&quot;idempotency_key&quot;: &quot;88241:[0-9a-f]{16}&quot;/.test(sys.html),
+      (sys.html.match(/idempotency_key.{0,60}/) || [""])[0]);
+    check("/systems uses the supplier's own reference as external_id",
+      /&quot;external_id&quot;: &quot;88241&quot;/.test(sys.html));
+    check("/systems names the four document types it reads",
+      ["purchase_order", "supplier_invoice", "delivery_booking", "quote_request"].every(t => sys.html.includes(t)));
+    check("/systems does not list the catch-all as a document type", !/>\s*unclassified\s*</.test(sys.html));
+    check("/systems explains the one asterisk once", (sys.visible.match(/\* optional|\* required/g) || []).length === 1);
+    check("/systems states the two thresholds it actually uses",
+      /85% on a required field/.test(sys.visible.replace(/\s+/g, " ")) && /80%\s*on the document type/.test(sys.visible.replace(/\s+/g, " ")));
+    check("/systems says the body is never posted", /printed and never\s*posted/.test(sys.visible.replace(/\s+/g, " ")));
+    check("/systems carries no price either", !/\$\s?\d/.test(sys.visible));
+    /* A legend that has drifted from the rules is worse than no legend: a reader quotes it back. So the
+       codes on the page must be codes something actually raises. */
+    const src = ["src/lib/types.ts", "src/lib/rules.ts", "src/app/api/pilot/route.ts", "src/lib/intake.ts"]
+      .map(f => readFileSync(f, "utf8")).join("\n");
+    /* The page writes `MISSING_<FIELD>` and React escapes the angle brackets, so the entities have to be
+       undone before matching or the placeholder codes are invisible to this check — which is exactly the
+       kind of assertion that passes by never seeing anything. */
+    const sysText = sys.visible.replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+    const codes = [...sysText.matchAll(/\b(AMBIGUOUS_TYPE|MISSING_[A-Z_<>]+|LOW_CONF_[A-Z_<>]+|UNREADABLE|NO_TRANSACTIONAL_CONTENT)\b/g)].map(m => m[1]);
+    check("every gate code on /systems is a code the engine emits",
+      codes.length >= 5 && codes.every(c => c.endsWith("_<FIELD") || src.includes(c) || src.includes(c.replace(/_[A-Z]+$/, ""))),
+      [...new Set(codes)].join(" "));
+  }
+
+  // ── 5. what was removed stays removed ────────────────────────────────────────
+  for (const p of ["/analytics", "/records", "/exceptions", "/connections", "/api/live", "/api/run", "/api/reset", "/api/records"]) {
+    const r = await fetch(BASE + p, { redirect: "manual" });
+    check(`${p} is gone, not redirected`, r.status === 404, `status ${r.status}`);
+  }
+  {
+    const gone = ["src/components/Hero.tsx", "src/components/Shell.tsx", "src/components/ShellWrap.tsx",
+      "src/components/Flow.tsx", "src/components/Pipeline.tsx", "src/components/Stat.tsx",
+      "src/components/Sparkline.tsx", "src/components/PageHead.tsx", "src/components/EventLog.tsx",
+      "src/components/DemoCaptions.tsx", "src/components/PilotRoom.tsx", "src/app/OpsClient.tsx",
+      "src/lib/wire-http.ts", "OFFLINE-MODE.md"];
+    const still = gone.filter(f => existsSync(f));
+    check("the console's components are deleted, not hidden", still.length === 0, still.join(" "));
+    const GATE_WORDS = new RegExp(["PILOT" + "_CODES", "PILOT" + "_OPEN", "PILOT" + "_MODEL_BILLED"].join("|"));
+    const gate = walk("src").filter(f => /\.(ts|tsx)$/.test(f))
+      .filter(f => GATE_WORDS.test(readFileSync(f, "utf8")));
+    check("the access-code gate is out of the code, not only out of the UI", gate.length === 0, gate.join(" "));
+  }
+
+  // ── 6. the stylesheet that shipped, and the marks it draws ───────────────────
+  {
+    const cssFiles = walk(".next/static").filter(f => f.endsWith(".css"));
+    const css = cssFiles.map(f => readFileSync(f, "utf8")).join("\n");
+    check("the built stylesheet exists", css.length > 2000, `${cssFiles.length} files, ${css.length} bytes`);
+    for (const cls of [".stamp-hold", ".meter", ".pane-wait", ".card-hero", ".rowin", ".display", ".lede", ".label"]) {
+      check(`the shipped CSS defines ${cls}`, css.includes(cls));
     }
+    check("the meter is a bar with no text inside it", !/\.meter[^{]*\{[^}]*content:/.test(css));
+    const machine = readFileSync("src/components/Machine.tsx", "utf8");
+    check("a confidence bar is drawn from the number, not from a caption",
+      /<i style=\{\{ width: pct\(f\.confidence\) \}\} \/>/.test(machine), "the fill is the only child of .meter");
+    const m = machine.match(/className=\{?`?meter[^`]*`?\}?>([\s\S]{0,120}?)<\/div>/);
+    check("nothing else is printed inside the bar", !m || !/\$\{/.test(m[1].replace(/<i [^>]*\/>/, "")));
   }
 
-  // ── 4d. a class used as a container for text is a bug, not a style choice ─
+  // ── 7. the README agrees with the product ────────────────────────────────────
   {
-    /*  .meter is 5px tall with overflow:hidden — it is a bar. Last pass, a gate flag was written into
-        one, and the code that explains a hold became an invisible sliver: no typecheck error, no build
-        error, and a screenshot small enough to read as fine. So the pattern itself is now refused. */
-    const room = readFileSync("src/components/PilotRoom.tsx", "utf8");
-    const badMeter = [...room.matchAll(/className=\{?["`'][^"`']*\bmeter[^"`']*["`'][^>]*>\s*\{/g)];
-    check("no text is ever placed inside a .meter element", badMeter.length === 0,
-      `${badMeter.length} occurrences`);
-    check("gate codes use the badge the palette defines for them",
-      /stamp-hold/.test(room) && !/className="meter[^"]*">\{f\}/.test(room));
+    const rm = readFileSync("README.md", "utf8").replace(/\s+/g, " ");
+    check("the README carries both denominators, together",
+      /88% of everything received/.test(rm) && /96% of actionable documents/.test(rm));
+    check("the README never quotes 96% bare",
+      (rm.match(/96%/g) || []).length === (rm.match(/96% of actionable/g) || []).length);
+    check("the README says the corpus is ours, not a client's",
+      /hand-authored|no customer data was used/i.test(rm));
+    check("the README names the four outcomes the page promises",
+      SAMPLES.every(s => rm.toLowerCase().includes(s.label.toLowerCase())), SAMPLES.map(s => s.label).join(" / "));
+    check("the README keeps the claims the code cannot support marked as not implemented",
+      /Not implemented/.test(rm) && /multi-line|Multi-line/.test(rm));
+    check("the price ladder is in the README and not on the page",
+      /\$1,500/.test(rm) && !/\$1,500/.test(root.visible));
+    check("the README describes the page that exists",
+      /One screen/.test(rm) && /\/systems/.test(rm) && /seven-section|operations console/.test(rm));
+    check("the README quotes the open URL as no-code",
+      /conduit-demo-version\.vercel\.app/.test(rm) && /no code/i.test(rm));
   }
-
-  // ── 5. the README cannot drift from the code it describes ─────────────────
-  const rm = readFileSync("README.md", "utf8");
-  check("README has a real demo URL (no placeholder left)",
-    rm.includes("https://conduit-demo-version.vercel.app") && !rm.includes("add your Vercel URL"));
-  check("README quotes both denominators", rm.includes("88%") && rm.includes("96%"));
-  check("README discloses the sample corpus and disclaims client results",
-    /sample corpus/i.test(rm) && /No customer data was used/i.test(rm),
-    "the UI carries one short label; the README carries the full disclosure");
-  check("README is honest about what is missing", rm.includes("Not implemented"));
 } catch (e) {
-  fails.push(`threw: ${e.message}`);
+  fails.push(`FAIL the suite itself threw — ${e.stack?.split("\n").slice(0, 3).join(" | ") ?? e}`);
 } finally {
   stopServer();
 }
 
-console.log(`\nverify — ${ok.length} passed, ${fails.length} failed\n`);
-for (const l of ok) console.log(`  ok   ${l}`);
-for (const l of fails) console.log(`  FAIL ${l}`);
-console.log();
+function walk(dir) {
+  const out = [];
+  for (const d of readdirSync(dir, { withFileTypes: true })) {
+    const p = `${dir}/${d.name}`;
+    if (d.isDirectory()) { if (!/node_modules|\.git|cache|media|fonts/.test(p)) out.push(...walk(p)); }
+    else out.push(p);
+  }
+  return out;
+}
+
+console.log(ok.join("\n"));
+if (fails.length) console.log("\n" + fails.join("\n"));
+console.log(`\n${ok.length} passed, ${fails.length} failed — the artifact a stranger gets.`);
 process.exit(fails.length ? 1 : 0);

@@ -9,12 +9,41 @@ import { DOC_TYPES } from "./doctypes";
  * idempotency key is the whole reason a re-run is safe, and `engine` is what makes the audit trail
  * honest: it says which engine produced the value, not merely that one did.
  */
-export function payloadFor(r: CommittedRecord, store: Store) {
+/** The reference the document itself carries — the string someone would type into their own search box
+ *  to find this order. Deliberately not the internal row reference: a payload keyed on `SO-24101` cannot
+ *  be reconciled against a supplier's paperwork, and reconciliation is the whole point of the write. */
+export function ownRef(values: Record<string, string>): string | null {
+  for (const k of ["po_number", "invoice_no", "ref", "quote_ref", "po_ref"]) {
+    const v = (values[k] ?? "").trim();
+    if (v) return v;
+  }
+  return null;
+}
+
+/** Two lanes of FNV-1a over the document's own text, printed as 16 hex characters. Not a signature and
+ *  not a security claim: it exists so that the same PDF sent twice — or forwarded twice — produces the
+ *  same idempotency key, which a per-run row id can never do. */
+export function textDigest(s: string): string {
+  const fnv = (seed: number, mul: number) => {
+    let h = BigInt(seed);
+    const m = BigInt(mul);
+    for (let i = 0; i < s.length; i++) { h ^= BigInt(s.charCodeAt(i)); h = (h * m) & 0xffffffffn; }
+    return h.toString(16).padStart(8, "0");
+  };
+  return fnv(0x811c9dc5, 0x01000193) + fnv(0xc2b2ae35, 0x27d4eb2f);
+}
+
+export function payloadFor(r: CommittedRecord, store: Store, opts: { text?: string } = {}) {
   const src = Object.values(store.processed).find(p => p.doc.id === r.sourceDocId)?.doc;
   return {
     object: DOC_TYPES[r.type]?.label ?? r.type,
-    external_id: r.ref,
-    idempotency_key: `${r.ref}:${r.sourceDocId}`,
+    external_id: ownRef(r.cells) ?? r.ref,
+    /** The document's own reference plus a digest of its text: identical paperwork in twice is recognised
+     *  as one order rather than posted as two. Without `text` a caller gets the internal row key, so the
+     *  weaker form is visible in the payload rather than hidden. */
+    idempotency_key: opts.text
+      ? `${ownRef(r.cells) ?? r.ref}:${textDigest(opts.text)}`
+      : `${r.ref}:${r.sourceDocId}`,
     received_at: src?.receivedAt ?? null,
     from: src?.from ?? null,
     fields: r.cells,
