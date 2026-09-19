@@ -257,8 +257,13 @@ export function findRef(text: string, kind: "po" | "invoice" | "any",
      is what makes the labelled reading win when the document does label it. */
   /* `\b` after the label is not decoration: without it "reference" is matched as the label "ref" and
      the rest of the word is captured as the value — "erence", no digits, rejected, field empty. */
-  const STRICT = String.raw`\s*(?:(?:no|number|ref|reference|#)\b\s*[:#=\-]?\s*|[:#=\-]\s*)` + REF;
-  const LOOSE = String.raw`\s*(?:no|number|ref|reference|#)?\s*[:#=\-]?\s*` + REF;
+  /* `is` belongs in the separator class: buyers write "Our PO number is HB-2291" as often as they
+     write "PO Number: HB-2291", and a label that only reads with a colon silently holds half of the
+     paperwork it should have cleared. The digit rule still applies, so a copula alone cannot turn a
+     sentence into a reference. */
+  const SEP = String.raw`(?:\s*(?:is|as per|per)\s*)?`;
+  const STRICT = String.raw`\s*(?:(?:no|number|ref|reference|#)\b\s*${SEP}[:#=\-]?\s*|[:#=\-]\s*)` + REF;
+  const LOOSE = String.raw`\s*(?:no|number|ref|reference|#)?\s*${SEP}[:#=\-]?\s*` + REF;
   const sets = [
     new RegExp(KW + STRICT, "i"),
     new RegExp(KW + LOOSE, "i"),
@@ -368,6 +373,19 @@ export function findSku(text: string): Hit {
   const all = [...flat(text).matchAll(/\b([A-Z]{2,3}[-/.]\d{3,6}[A-Z0-9]?)\b/g)].map(m => m[1]);
   const uniq = [...new Set(all)];
   if (!uniq.length) return null;
+
+  /* A labelled code wins over the first code of the right shape, for the same reason a labelled
+     reference does: an order number and a product code are the same letters-and-digits, and "whichever
+     one came first" is a coin flip that books the wrong column at full confidence. `sku` may stand
+     alone; the generic nouns only count when something separates them from their value, so
+     "product codes below:" cannot become the SKU. */
+  const blob = asBlob(text);
+  const lab = /\b(?:sku)\s*(?:code)?\s*(?:no|number|#)?\s*[:#=\-]?\s*([A-Z0-9][A-Z0-9\/.\-_]{2,22})\b|\b(?:item|part|article|product)\s*(?:code|no|number|#)?\s*[:#=]\s*([A-Z0-9][A-Z0-9\/.\-_]{2,22})\b/i.exec(blob);
+  if (lab) {
+    const v = (lab[1] ?? lab[2] ?? "").replace(/[.\-_:]+$/, "");
+    if (v.length >= 3 && /\d/.test(v) && !(v.includes("-") && /^\d/.test(v)))
+      return { value: v, confidence: 0.96, evidence: lab[0].trim().slice(0, 90) };
+  }
   if (uniq.length === 1) return { value: uniq[0], confidence: 0.94, evidence: uniq[0] };
   return { value: uniq[0], confidence: 0.8, evidence: uniq.slice(0, 3).join(", "),
     why: `${uniq.length} product codes on one document; only the first was taken — one line per write is a build decision, not a guess` };

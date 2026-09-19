@@ -176,6 +176,22 @@ for (const sm of SAMPLES) {
 t("a letterhead line cannot become the invoice number",
   /MF-9930/.test(runRules("MERIDIAN FASTENERS LTD\nSUPPLIER INVOICE\nInvoice No: MF-9930\nAmount due: £18,420.00").extraction!.values.invoice_no ?? ""),
   runRules("MERIDIAN FASTENERS LTD\nSUPPLIER INVOICE\nInvoice No: MF-9930\nAmount due: £18,420.00").extraction!.values.invoice_no);
+/* Two shapes of real paperwork that used to be read wrongly rather than refused: a forwarded order
+   whose reference and product code are the same pattern, and a sentence that puts "is" between a label
+   and its value. Both are asserted here because the claim is "your email, read correctly" — not a demo
+   of the tidy sample we wrote ourselves. */
+const fwd = runRules("Fwd: Order HB-2291 - Harker Build (Leamington)\nCompany: Harker Build Ltd\nPO Number: HB-2291\nSKU: BS-1140\nQuantity: 4,000 units\nUnit price: 0.18 GBP\nRequired by: 28/09/2026");
+t("a forwarded order gets its product code from the label, not from whichever code came first",
+  fwd.extraction!.values.sku === "BS-1140" && fwd.extraction!.values.po_number === "HB-2291",
+  `${fwd.extraction!.values.sku} / ${fwd.extraction!.values.po_number}`);
+t("...and the whole line clears, because nothing had to be guessed",
+  !blocks(fwd.extraction!, DOC_TYPES.purchase_order), failedRules(fwd.extraction!, DOC_TYPES.purchase_order).join(",") || "clean");
+const cop = runRules("Order confirmation\nOur PO number is HB-2291\nDeliver 1,200 of NW-4420-BLK\nCompany: Harker Build Ltd");
+t("a label followed by \"is\" is still a label",
+  (cop.extraction!.values.po_number ?? "").startsWith("HB-2291"), String(cop.extraction!.values.po_number));
+t("a sentence with no digits in it is still not a reference",
+  runRules("Order enquiry\nOur PO number is not confirmed yet\nCompany: Harker Build Ltd").extraction!.values.po_number === "");
+
 const bare = runRules("MERIDIAN FASTENERS LTD\nInvoice 9930\nAmount due: 18,420.00 GBP");
 t("a bare label with no colon is still read, by the loose pass behind the strict one",
   bare.extraction!.values.invoice_no === "9930", String(bare.extraction!.values.invoice_no));
