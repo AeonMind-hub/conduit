@@ -4,6 +4,7 @@ import { toFixture } from "../src/lib/engine";
 import { blocks, failedRules, DOC_TYPES } from "../src/lib";
 import { rates, pct } from "../src/lib/types";
 import { runRules } from "../src/lib/rules";
+import { textDigest, digestibleText } from "../src/lib/payload";
 import { EMPTY_WIRE, rebuild } from "../src/lib/session";
 import { DOCS } from "../src/lib/corpus";
 import { CLASSIFY_THRESHOLD } from "../src/lib/types";
@@ -191,6 +192,18 @@ t("a label followed by \"is\" is still a label",
   (cop.extraction!.values.po_number ?? "").startsWith("HB-2291"), String(cop.extraction!.values.po_number));
 t("a sentence with no digits in it is still not a reference",
   runRules("Order enquiry\nOur PO number is not confirmed yet\nCompany: Harker Build Ltd").extraction!.values.po_number === "");
+
+/* The idempotency key has to be a property of the paperwork. This is the assertion that keeps it one:
+   the same document with the noise a different mailer or web client introduces hashes alike, and the same
+   document with a figure changed does not. */
+const poClean = "NORTHGATE INDUSTRIAL SUPPLIES LTD\nPURCHASE ORDER 88241\nUnit price: £0.18\nTotal: £720.00";
+const poNoisy = "NORTHGATE INDUSTRIAL SUPPLIES LTD\r\n\r\nPURCHASE ORDER 88241\r\nUnit price: Â£0.18\r\nTotal:  £720.00  \r\n";
+const poEdited = poClean.replace("720.00", "730.00");
+t("the key survives CRLF, doubled spaces and a currency sign mis-decoded into two bytes",
+  textDigest(digestibleText(poClean)) === textDigest(digestibleText(poNoisy)),
+  `${textDigest(digestibleText(poClean)).slice(0, 8)} vs ${textDigest(digestibleText(poNoisy)).slice(0, 8)}`);
+t("…and an amount that changed is still a different order",
+  textDigest(digestibleText(poClean)) !== textDigest(digestibleText(poEdited)));
 
 const bare = runRules("MERIDIAN FASTENERS LTD\nInvoice 9930\nAmount due: 18,420.00 GBP");
 t("a bare label with no colon is still read, by the loose pass behind the strict one",

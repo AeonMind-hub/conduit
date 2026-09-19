@@ -20,6 +20,20 @@ export function ownRef(values: Record<string, string>): string | null {
   return null;
 }
 
+/**
+ * The text as the document means it, before it is hashed. A key that changes with the transport is not a
+ * property of the paperwork: the same forwarded invoice arrives with CRLF line endings from one mailer
+ * and LF from another, one web client hands a `£` through as two bytes and another as one, and every one
+ * of those would otherwise read as a different order. Whitespace is collapsed, the two bytes a
+ * mis-decoded currency sign turns into are the same noise this removes, and nothing that a person would
+ * call a different document ever hashes alike — a changed amount is a changed line, asserted below.
+ */
+export function digestibleText(s: string): string {
+  return (s ?? "").replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ")
+    .replace(/[^\x20-\x7e\n]/g, "").replace(/[ \t]+/g, " ")
+    .split("\n").map(l => l.trim()).filter(Boolean).join("\n");
+}
+
 /** Two lanes of FNV-1a over the document's own text, printed as 16 hex characters. Not a signature and
  *  not a security claim: it exists so that the same PDF sent twice — or forwarded twice — produces the
  *  same idempotency key, which a per-run row id can never do. */
@@ -42,7 +56,7 @@ export function payloadFor(r: CommittedRecord, store: Store, opts: { text?: stri
      *  as one order rather than posted as two. Without `text` a caller gets the internal row key, so the
      *  weaker form is visible in the payload rather than hidden. */
     idempotency_key: opts.text
-      ? `${ownRef(r.cells) ?? r.ref}:${textDigest(opts.text)}`
+      ? `${ownRef(r.cells) ?? r.ref}:${textDigest(digestibleText(opts.text))}`
       : `${r.ref}:${r.sourceDocId}`,
     received_at: src?.receivedAt ?? null,
     from: src?.from ?? null,
